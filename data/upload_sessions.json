@@ -1,0 +1,19 @@
+[
+  {
+    "uploadId": "upl-1794238549734-29442cf3b442416b",
+    "filename": "chunk_test.mp4",
+    "totalSize": 474244,
+    "chunkSize": 307200,
+    "totalChunks": 2,
+    "receivedChunks": [
+      0,
+      1
+    ],
+    "receivedBytes": 474244,
+    "status": "completed",
+    "createdAt": 1794238549734,
+    "updatedAt": 1794238549787,
+    "finalPath": "/app/applet/uploads/video-upl-1794238549734-29442cf3b442416b-chunk_test.mp4",
+    "chunkDir": "/app/applet/uploads/chunks/upl-1794238549734-29442cf3b442416b"
+  }
+]

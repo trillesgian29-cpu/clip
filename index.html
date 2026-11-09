@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClipGenius AI - AI Video Clipping & Shorts Studio</title>
+    <meta name="description" content="AI-powered long-to-short video clipping studio with automated virality scoring, hook detection, multi-clip rendering via FFmpeg, and Supabase cloud sync." />
+    <meta property="og:title" content="ClipGenius AI - AI Video Clipping & Shorts Studio" />
+    <meta property="og:description" content="AI-powered long-to-short video clipping studio with automated virality scoring, hook detection, multi-clip rendering via FFmpeg, and Supabase cloud sync." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      // Runtime environment guard:
+      // Ensure window.fetch has a setter so that any script or tool attempting an assignment
+      // (e.g. window.fetch = ...) does not crash with "TypeError: Cannot set property fetch of #<Window> which has only a getter"
+      (function() {
+        try {
+          if (typeof window !== 'undefined' && typeof window.fetch === 'function') {
+            var nativeFetch = window.fetch.bind(window);
+            var _activeFetch = nativeFetch;
+            var desc = Object.getOwnPropertyDescriptor(window, 'fetch') ||
+                       (window.__proto__ ? Object.getOwnPropertyDescriptor(window.__proto__, 'fetch') : null);
+            if (desc && !desc.set) {
+              Object.defineProperty(window, 'fetch', {
+                get: function() {
+                  return _activeFetch;
+                },
+                set: function(fn) {
+                  if (typeof fn === 'function') {
+                    _activeFetch = fn;
+                  }
+                },
+                configurable: true,
+                enumerable: true
+              });
+            }
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

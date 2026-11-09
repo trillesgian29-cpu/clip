@@ -1,0 +1,6 @@
+{
+  "name": "ClipGenius AI",
+  "description": "AI-powered long-to-short video clipping studio with automated virality scoring, hook detection, multi-clip rendering via FFmpeg, and Supabase cloud sync.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
