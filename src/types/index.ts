@@ -49,7 +49,18 @@ export interface ClipSuggestion {
   captions?: string;
   hashtags: string[];
   keyQuotes?: string[];
-  // New Viral Detection & Review Fields
+  // Evidence-based Selection & Nemotron fields
+  clipId?: string;
+  sourceVideoId?: string;
+  start?: number;
+  end?: number;
+  score?: number;
+  confidence?: number;
+  category?: string;
+  analysisStatus?: 'completed' | 'pending' | 'failed';
+  thumbnailUrl?: string;
+  selected?: boolean;
+  // Viral Detection & Review Fields
   clip_id?: string;
   local_start?: string;
   local_end?: string;
@@ -128,6 +139,9 @@ export interface SystemStatus {
   ffprobeAvailable: boolean;
   ffmpegVersion?: string;
   geminiConfigured: boolean;
+  openRouterConfigured: boolean;
+  openRouterModel?: string;
+  activeAiProvider: 'nemotron' | 'gemini' | 'none';
   supabaseConnected: boolean;
   authenticated: boolean;
   activeUploadsCount: number;

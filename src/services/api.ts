@@ -34,9 +34,27 @@ function getAuthHeaders(): HeadersInit {
 }
 
 // Safe native fetch wrapper: invokes native browser fetch without overriding global properties
+// and guards against unexpected HTML fallbacks
 async function safeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const fetchFn = typeof window !== 'undefined' && window.fetch ? window.fetch.bind(window) : globalThis.fetch;
-  return fetchFn(input, init);
+  const res = await fetchFn(input, init);
+  return res;
+}
+
+async function safeJson<T = any>(res: Response): Promise<T> {
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const text = await res.text();
+    if (text.startsWith('<!doctype') || text.startsWith('<html')) {
+      throw new Error(`Server returned HTML instead of JSON (${res.status} ${res.statusText})`);
+    }
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(`Invalid JSON response: ${text.slice(0, 150)}`);
+    }
+  }
+  return res.json();
 }
 
 export const api = {
@@ -47,7 +65,7 @@ export const api = {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!res.ok) throw new Error('Failed to fetch system status');
-    return res.json();
+    return safeJson(res);
   },
 
   // Owner Auth
@@ -57,7 +75,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ passcode }),
     });
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) throw new Error(data.error || 'Login failed');
     setStoredToken(data.token);
     return data;
@@ -81,7 +99,7 @@ export const api = {
       const res = await safeFetch('/api/auth/check', {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const data = await res.json();
+      const data = await safeJson(res);
       return Boolean(data.authenticated);
     } catch {
       return false;
@@ -94,8 +112,31 @@ export const api = {
       headers: getAuthHeaders(),
       body: JSON.stringify({ oldPasscode, newPasscode }),
     });
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) throw new Error(data.error || 'Failed to update passcode');
+  },
+
+  // Videos List & Management
+  async getVideos(): Promise<VideoMetadata[]> {
+    const res = await safeFetch('/api/videos');
+    const data = await safeJson(res);
+    return data.videos || [];
+  },
+
+  async getVideo(id: string): Promise<VideoMetadata> {
+    const res = await safeFetch(`/api/videos/item/${id}`);
+    const data = await safeJson(res);
+    if (!res.ok) throw new Error(data.error || 'Video not found');
+    return data.video;
+  },
+
+  async deleteVideo(id: string): Promise<void> {
+    const res = await safeFetch(`/api/videos/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    const data = await safeJson(res);
+    if (!res.ok) throw new Error(data.error || 'Failed to delete video');
   },
 
   // Video Upload
@@ -115,7 +156,7 @@ export const api = {
       body: formData,
     });
 
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) throw new Error(data.error || 'Failed to upload video');
     return data;
   },
@@ -131,14 +172,15 @@ export const api = {
       body: JSON.stringify({ sampleType }),
     });
 
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) throw new Error(data.error || 'Failed to load sample video');
     return data;
   },
 
-  // AI Clip Analysis
+  // AI Clip Analysis (Nemotron / Gemini)
   async analyzeVideo(params: {
     videoId: string;
+    preferredProvider?: 'nemotron' | 'gemini' | 'auto';
     clipCount?: number;
     clipStyle?: string;
     customPrompt?: string;
@@ -149,16 +191,33 @@ export const api = {
     chunkName?: string;
     chunkOffsetSeconds?: number;
     previouslySelectedClips?: ClipSuggestion[];
-  }): Promise<{ clips: ClipSuggestion[]; sourceVideo: VideoMetadata }> {
+    privacyConsent?: boolean;
+  }): Promise<{
+    clips: ClipSuggestion[];
+    sourceVideo: VideoMetadata;
+    providerUsed?: string;
+    modelUsed?: string;
+    stagesCompleted?: string[];
+  }> {
     const res = await safeFetch('/api/ai/analyze', {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify(params),
     });
 
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) throw new Error(data.error || 'AI analysis failed');
     return data;
+  },
+
+  // Delete Render Job and File
+  async deleteRenderJob(jobId: string): Promise<void> {
+    const res = await safeFetch(`/api/clips/render/${jobId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    const data = await safeJson(res);
+    if (!res.ok) throw new Error(data.error || 'Failed to delete render');
   },
 
   // FFmpeg Clip Rendering

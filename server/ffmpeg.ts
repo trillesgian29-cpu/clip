@@ -116,25 +116,96 @@ export async function generateThumbnail(
 }
 
 /**
+ * Verify whether a timestamp range contains decodable video frames
+ */
+export async function verifyDecodableRange(
+  sourcePath: string,
+  startTime: number,
+  endTime: number
+): Promise<boolean> {
+  try {
+    const testDuration = Math.min(1.0, Math.max(0.1, (endTime - startTime) / 2));
+    const cmd = `ffmpeg -v error -ss ${startTime.toFixed(3)} -i "${sourcePath}" -t ${testDuration.toFixed(3)} -f null -`;
+    await execAsync(cmd);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Extract representative base64 JPEG frames at specified timestamps for Nemotron VL analysis
+ */
+export async function extractSampleFrames(
+  sourcePath: string,
+  timestamps: number[],
+  maxDimension: number = 640
+): Promise<Array<{ timestamp: number; base64: string }>> {
+  const frames: Array<{ timestamp: number; base64: string }> = [];
+  const tempDir = path.resolve(process.cwd(), 'uploads', 'temp_frames', `sample_${Date.now()}`);
+
+  if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir, { recursive: true });
+  }
+
+  try {
+    for (let i = 0; i < timestamps.length; i++) {
+      const ts = Math.max(0, timestamps[i]);
+      const framePath = path.join(tempDir, `frame_${i}_${Math.round(ts)}.jpg`);
+
+      try {
+        const cmd = `ffmpeg -v error -ss ${ts.toFixed(3)} -i "${sourcePath}" -vframes 1 -q:v 3 -vf "scale='min(${maxDimension},iw)':-2" -y "${framePath}"`;
+        await execAsync(cmd);
+
+        if (fs.existsSync(framePath) && fs.statSync(framePath).size > 500) {
+          const buffer = fs.readFileSync(framePath);
+          frames.push({
+            timestamp: ts,
+            base64: buffer.toString('base64'),
+          });
+        }
+      } catch (err) {
+        console.warn(`Could not extract frame at ${ts}s:`, err);
+      }
+    }
+  } finally {
+    // Immediate cleanup of temporary frame files
+    try {
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    } catch {}
+  }
+
+  return frames;
+}
+
+/**
  * Render a video clip with precise start/end time and aspect ratio cropping
  */
 export async function renderClip(options: RenderOptions): Promise<string> {
   const { sourcePath, outputPath, startTime, endTime, aspectRatio, onProgress } = options;
   const clipDuration = Math.max(0.5, endTime - startTime);
 
+  // Probe audio stream existence to avoid forcing nonexistent audio
+  let hasAudioStream = true;
+  try {
+    const probe = await probeVideo(sourcePath);
+    hasAudioStream = probe.hasAudio;
+  } catch {
+    hasAudioStream = true;
+  }
+
   // Prepare aspect ratio filter
-  // 9:16 Vertical (TikTok/Reels/Shorts)
-  // 1:1 Square (Instagram)
-  // 16:9 Landscape (YouTube)
+  // 9:16 Vertical (TikTok/Reels/Shorts) -> 1080x1920
+  // 1:1 Square (Instagram) -> 1080x1080
+  // 16:9 Landscape (YouTube) -> 1920x1080
   let videoFilter = '';
   if (aspectRatio === '9:16') {
-    // Crop center to 9:16 aspect ratio then scale to 1080x1920
     videoFilter = 'crop=ih*9/16:ih:(iw-ih*9/16)/2:0,scale=1080:1920';
   } else if (aspectRatio === '1:1') {
-    // Crop center square then scale to 1080x1080
     videoFilter = 'crop=min(iw\\,ih):min(iw\\,ih):(iw-min(iw\\,ih))/2:(ih-min(iw\\,ih))/2,scale=1080:1080';
   } else {
-    // 16:9 Standard widescreen
     videoFilter = 'scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2';
   }
 
@@ -146,13 +217,22 @@ export async function renderClip(options: RenderOptions): Promise<string> {
     '-c:v', 'libx264',
     '-preset', 'fast',
     '-crf', '22',
-    '-c:a', 'aac',
-    '-b:a', '192k',
+  ];
+
+  // Only encode AAC audio if audio stream actually exists
+  if (hasAudioStream) {
+    args.push('-c:a', 'aac', '-b:a', '192k', '-ar', '48000');
+  } else {
+    args.push('-an');
+  }
+
+  args.push(
     '-pix_fmt', 'yuv420p',
     '-movflags', '+faststart',
+    '-avoid_negative_ts', 'make_zero',
     '-y',
-    outputPath,
-  ];
+    outputPath
+  );
 
   return new Promise((resolve, reject) => {
     const process = spawn('ffmpeg', args);

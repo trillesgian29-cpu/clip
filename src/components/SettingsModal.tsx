@@ -37,7 +37,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   } | null>(null);
   const [resources, setResources] = useState<SystemResourceInfo | null>(null);
   const [storageInfo, setStorageInfo] = useState<StorageArchitectureInfo | null>(null);
-  const [activeTab, setActiveTab] = useState<'resources' | 'limits' | 'storage' | 'database'>('resources');
+  const [activeTab, setActiveTab] = useState<'resources' | 'ai' | 'limits' | 'storage' | 'database'>('resources');
 
   useEffect(() => {
     if (isOpen) {
@@ -71,9 +71,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <Server className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white">Large Video Architecture & Diagnostics</h3>
+              <h3 className="text-base font-bold text-white">ClipGenius AI Diagnostics & Configuration</h3>
               <p className="text-xs text-neutral-400">
-                Resource monitoring, infrastructure limits & object storage evaluation
+                NVIDIA Nemotron 3.5 Super VL, Gemini Fallback, FFmpeg, and Supabase status
               </p>
             </div>
           </div>
@@ -86,10 +86,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Tab navigation */}
-        <div className="flex gap-2 border-b border-neutral-800 pt-3 pb-2 text-xs font-semibold">
+        <div className="flex gap-2 border-b border-neutral-800 pt-3 pb-2 text-xs font-semibold overflow-x-auto">
           <button
             onClick={() => setActiveTab('resources')}
-            className={`px-3 py-1.5 rounded-lg transition ${
+            className={`px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
               activeTab === 'resources'
                 ? 'bg-violet-600 text-white'
                 : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
@@ -98,8 +98,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             System Resources
           </button>
           <button
+            onClick={() => setActiveTab('ai')}
+            className={`px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
+              activeTab === 'ai'
+                ? 'bg-violet-600 text-white'
+                : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+            }`}
+          >
+            AI Models & Nemotron
+          </button>
+          <button
             onClick={() => setActiveTab('limits')}
-            className={`px-3 py-1.5 rounded-lg transition ${
+            className={`px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
               activeTab === 'limits'
                 ? 'bg-violet-600 text-white'
                 : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
@@ -109,7 +119,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('storage')}
-            className={`px-3 py-1.5 rounded-lg transition ${
+            className={`px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
               activeTab === 'storage'
                 ? 'bg-violet-600 text-white'
                 : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
@@ -119,7 +129,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('database')}
-            className={`px-3 py-1.5 rounded-lg transition ${
+            className={`px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
               activeTab === 'database'
                 ? 'bg-violet-600 text-white'
                 : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
@@ -197,6 +207,120 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
                 <p className="text-emerald-400/90 leading-relaxed">
                   To prevent Node.js heap exhaustion (the container has 4GB of RAM), incoming 10MB chunks are piped directly to disk without ever buffering into JavaScript memory. Even when assembling a 20 GB video file, resident memory overhead stays under 25 MB.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: AI Models & Nemotron Status */}
+          {activeTab === 'ai' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Nemotron 3.5 Super VL Box */}
+                <div className="rounded-xl border border-neutral-800 bg-neutral-950/70 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                        <Cpu className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-white">NVIDIA Nemotron 3.5 Super VL</h4>
+                        <p className="text-[11px] text-neutral-400">Primary AI Video Understanding Engine</p>
+                      </div>
+                    </div>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                        systemStatus?.openRouterConfigured
+                          ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30'
+                          : 'bg-amber-500/10 text-amber-300 border border-amber-500/30'
+                      }`}
+                    >
+                      {systemStatus?.openRouterConfigured ? 'Connected' : 'Missing Key'}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5 text-xs">
+                    <div className="flex justify-between text-neutral-400">
+                      <span>Model:</span>
+                      <span className="font-mono text-neutral-200">
+                        {systemStatus?.openRouterModel || 'nvidia/nemotron-3.5-super-vl:free'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-neutral-400">
+                      <span>API Gateway:</span>
+                      <span className="font-mono text-neutral-200">OpenRouter</span>
+                    </div>
+                    <div className="flex justify-between text-neutral-400">
+                      <span>Env Secret:</span>
+                      <span className="font-mono text-neutral-200">OPENROUTER_API_KEY</span>
+                    </div>
+                    <div className="flex justify-between text-neutral-400">
+                      <span>Sampling Mode:</span>
+                      <span className="text-emerald-400 font-medium">Uniform Keyframe Sampling</span>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-neutral-400 pt-2 border-t border-neutral-850 leading-relaxed">
+                    Processes 1–2 hour long videos via lightweight uniform visual frame extraction, eliminating cloud upload limits and memory overflow.
+                  </p>
+                </div>
+
+                {/* Gemini 3.8 Flash Fallback Box */}
+                <div className="rounded-xl border border-neutral-800 bg-neutral-950/70 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-violet-500/20 text-violet-400 border border-violet-500/30">
+                        <Sparkles className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-white">Gemini 3.8 Flash</h4>
+                        <p className="text-[11px] text-neutral-400">Automatic Fallback Engine</p>
+                      </div>
+                    </div>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                        systemStatus?.geminiConfigured
+                          ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30'
+                          : 'bg-neutral-800 text-neutral-400 border border-neutral-700'
+                      }`}
+                    >
+                      {systemStatus?.geminiConfigured ? 'Available' : 'Unconfigured'}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5 text-xs">
+                    <div className="flex justify-between text-neutral-400">
+                      <span>Model:</span>
+                      <span className="font-mono text-neutral-200">gemini-3.8-flash</span>
+                    </div>
+                    <div className="flex justify-between text-neutral-400">
+                      <span>SDK:</span>
+                      <span className="font-mono text-neutral-200">@google/genai</span>
+                    </div>
+                    <div className="flex justify-between text-neutral-400">
+                      <span>Env Secret:</span>
+                      <span className="font-mono text-neutral-200">GEMINI_API_KEY</span>
+                    </div>
+                    <div className="flex justify-between text-neutral-400">
+                      <span>Fallback Trigger:</span>
+                      <span className="text-violet-300 font-medium">Automatic on Nemotron Error</span>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-neutral-400 pt-2 border-t border-neutral-850 leading-relaxed">
+                    Provides secondary analysis and timestamp validation if OpenRouter experiences rate limits or network degradation.
+                  </p>
+                </div>
+              </div>
+
+              {/* Strict Accuracy & Decodable Validation Banner */}
+              <div className="rounded-xl border border-violet-500/20 bg-violet-950/20 p-4 text-xs text-violet-200 space-y-2">
+                <div className="flex items-center gap-2 font-bold text-violet-300">
+                  <ShieldCheck className="h-4 w-4" />
+                  <span>Strict Accuracy Guarantee: Never Invent Timestamps</span>
+                </div>
+                <p className="text-violet-300/90 leading-relaxed">
+                  ClipGenius AI never invents timestamps or falls back to random ranges. Every moment is rigorously validated through FFmpeg decodable frame checks, overlap deduplication (&gt;75%), and ranked by virality score.
                 </p>
               </div>
             </div>

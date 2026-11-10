@@ -12,6 +12,8 @@ import {
   renderClip,
 } from './server/ffmpeg.ts';
 import { analyzeVideoWithGemini, validateClipTimestampsAndQuote } from './server/gemini.ts';
+import { dispatchVideoAnalysis } from './server/aiDispatcher.ts';
+import { isOpenRouterConfigured, NEMOTRON_MODEL } from './server/nemotron.ts';
 import {
   createSessionToken,
   verifyPasscode,
@@ -28,6 +30,11 @@ import {
   savePublishedClip,
   getPublishedClips,
   deletePublishedClip,
+  saveVideoRecord,
+  getVideos,
+  getVideo,
+  deleteVideoRecord,
+  deleteRenderJob,
   SUPABASE_SCHEMA_SQL,
 } from './server/supabase.ts';
 import {
@@ -97,9 +104,71 @@ const upload = multer({
   },
 });
 
-// In-memory registries
+// In-memory registries + active downloads tracker
 const videosRegistry = new Map<string, VideoMetadata>();
 const renderJobsRegistry = new Map<string, RenderJob>();
+const activeDownloads = new Set<string>();
+
+// Auto-recovery & persistence initialization
+async function initRegistries() {
+  try {
+    const savedVideos = await getVideos();
+    for (const v of savedVideos) {
+      if (fs.existsSync(v.filepath)) {
+        videosRegistry.set(v.id, v);
+      }
+    }
+
+    const dirs = [
+      { dir: UPLOADS_DIR, prefix: 'vid' },
+      { dir: SAMPLES_DIR, prefix: 'sample' },
+    ];
+
+    for (const { dir, prefix } of dirs) {
+      if (!fs.existsSync(dir)) continue;
+      const files = fs.readdirSync(dir);
+      for (const file of files) {
+        if (!file.endsWith('.mp4') && !file.endsWith('.mov') && !file.endsWith('.webm') && !file.endsWith('.mkv')) continue;
+        const filepath = path.join(dir, file);
+        if (!fs.statSync(filepath).isFile()) continue;
+
+        const alreadyIndexed = Array.from(videosRegistry.values()).some((v) => v.filepath === filepath);
+        if (!alreadyIndexed) {
+          try {
+            const probe = await probeVideo(filepath);
+            const id = `${prefix}-${Date.now()}-${Math.round(Math.random() * 1000)}`;
+            const videoMeta: VideoMetadata = {
+              id,
+              filename: file,
+              originalName: file,
+              filepath,
+              url: `/api/videos/stream/${id}`,
+              duration: Math.round(probe.duration * 10) / 10,
+              width: probe.width,
+              height: probe.height,
+              aspectRatio: `${probe.width}:${probe.height}`,
+              format: probe.format,
+              size: fs.statSync(filepath).size,
+              bitrate: probe.bitrate,
+              fps: probe.fps,
+              hasAudio: probe.hasAudio,
+              uploadedAt: new Date(fs.statSync(filepath).mtime).toISOString(),
+            };
+            videosRegistry.set(id, videoMeta);
+            await saveVideoRecord(videoMeta);
+            console.log(`[ClipGenius Storage] Recovered video on disk: ${file} (ID: ${id})`);
+          } catch (err) {
+            console.warn(`[ClipGenius Storage] Could not index ${file}:`, err);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[ClipGenius Storage] Registry initialization warning:', err);
+  }
+}
+
+initRegistries();
 
 // Middleware
 app.use(cors());
@@ -176,11 +245,20 @@ app.get('/api/system/status', async (req: Request, res: Response) => {
   const token = getBearerToken(req);
   const supabase = getSupabaseStatus();
 
+  const openRouterConfigured = isOpenRouterConfigured();
+  const geminiConfigured = Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY');
+  let activeAiProvider: 'nemotron' | 'gemini' | 'none' = 'none';
+  if (openRouterConfigured) activeAiProvider = 'nemotron';
+  else if (geminiConfigured) activeAiProvider = 'gemini';
+
   return res.json({
     ffmpegAvailable: ffmpegStatus.ffmpeg,
     ffprobeAvailable: ffmpegStatus.ffprobe,
     ffmpegVersion: ffmpegStatus.version,
-    geminiConfigured: Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY'),
+    geminiConfigured,
+    openRouterConfigured,
+    openRouterModel: NEMOTRON_MODEL,
+    activeAiProvider,
     supabaseConnected: supabase.isConfigured,
     supabaseUrl: supabase.url,
     authenticated: verifySessionToken(token),
@@ -343,6 +421,7 @@ app.post('/api/upload/complete', async (req: Request, res: Response) => {
     };
 
     videosRegistry.set(videoId, videoMeta);
+    await saveVideoRecord(videoMeta);
 
     return res.status(200).json({
       success: true,
@@ -407,6 +486,7 @@ app.post('/api/videos/upload', upload.single('video'), async (req: Request, res:
     };
 
     videosRegistry.set(videoId, videoMeta);
+    await saveVideoRecord(videoMeta);
 
     return res.status(201).json({
       success: true,
@@ -492,6 +572,7 @@ app.post('/api/videos/sample', async (req: Request, res: Response) => {
     };
 
     videosRegistry.set(videoId, videoMeta);
+    await saveVideoRecord(videoMeta);
 
     return res.json({
       success: true,
@@ -504,13 +585,106 @@ app.post('/api/videos/sample', async (req: Request, res: Response) => {
   }
 });
 
-// Stream video with HTTP 206 partial content support for scrubbing
-app.get('/api/videos/stream/:id', (req: Request, res: Response) => {
-  const { id } = req.params;
-  const video = videosRegistry.get(id);
+// List all registered videos (persisted across restarts)
+app.get('/api/videos', (_req: Request, res: Response) => {
+  return res.json({
+    success: true,
+    videos: Array.from(videosRegistry.values()),
+  });
+});
 
+// Get single video metadata
+app.get('/api/videos/item/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  let video = videosRegistry.get(id);
+  if (!video) {
+    const saved = await getVideo(id);
+    if (saved && fs.existsSync(saved.filepath)) {
+      video = saved;
+      videosRegistry.set(id, saved);
+    }
+  }
+
+  if (!video) {
+    return res.status(404).json({ error: 'Video not found in persistent registry' });
+  }
+
+  return res.json({ success: true, video });
+});
+
+// Delete a source video
+app.delete('/api/videos/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const video = videosRegistry.get(id);
+
+    if (video?.filepath && fs.existsSync(video.filepath)) {
+      try {
+        fs.unlinkSync(video.filepath);
+      } catch (err) {
+        console.warn(`Could not delete file ${video.filepath}:`, err);
+      }
+    }
+
+    videosRegistry.delete(id);
+    await deleteVideoRecord(id);
+
+    return res.json({ success: true, message: 'Video deleted from registry and disk' });
+  } catch (error) {
+    return res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// Stream video HEAD request for fast player metadata probing
+app.head('/api/videos/stream/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  let video = videosRegistry.get(id);
   let filepath = video?.filepath;
-  if (!filepath) {
+
+  if (!filepath || !fs.existsSync(filepath)) {
+    const saved = await getVideo(id);
+    if (saved && fs.existsSync(saved.filepath)) {
+      filepath = saved.filepath;
+      videosRegistry.set(id, saved);
+    }
+  }
+
+  if (!filepath || !fs.existsSync(filepath)) {
+    const potentialPaths = [
+      path.join(UPLOADS_DIR, `${id}.mp4`),
+      path.join(SAMPLES_DIR, `${id}.mp4`),
+    ];
+    filepath = potentialPaths.find((p) => fs.existsSync(p));
+  }
+
+  if (!filepath || !fs.existsSync(filepath)) {
+    return res.status(404).end();
+  }
+
+  const stat = fs.statSync(filepath);
+  res.writeHead(200, {
+    'Content-Length': stat.size,
+    'Content-Type': 'video/mp4',
+    'Accept-Ranges': 'bytes',
+  });
+  res.end();
+});
+
+// Stream video with robust HTTP 206 partial content and HTTP 416 range validation
+app.get('/api/videos/stream/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  let video = videosRegistry.get(id);
+  let filepath = video?.filepath;
+
+  if (!filepath || !fs.existsSync(filepath)) {
+    const saved = await getVideo(id);
+    if (saved && fs.existsSync(saved.filepath)) {
+      filepath = saved.filepath;
+      videosRegistry.set(id, saved);
+    }
+  }
+
+  if (!filepath || !fs.existsSync(filepath)) {
     // Check if directly in uploads or samples
     const potentialPaths = [
       path.join(UPLOADS_DIR, `${id}.mp4`),
@@ -520,7 +694,7 @@ app.get('/api/videos/stream/:id', (req: Request, res: Response) => {
   }
 
   if (!filepath || !fs.existsSync(filepath)) {
-    return res.status(404).send('Video not found');
+    return res.status(404).json({ error: 'Video file not found or still synchronizing' });
   }
 
   const stat = fs.statSync(filepath);
@@ -531,6 +705,13 @@ app.get('/api/videos/stream/:id', (req: Request, res: Response) => {
     const parts = range.replace(/bytes=/, '').split('-');
     const start = parseInt(parts[0], 10);
     const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+
+    // HTTP 416 Range Not Satisfiable check
+    if (isNaN(start) || start >= fileSize || (parts[1] && (end >= fileSize || start > end))) {
+      res.status(416).setHeader('Content-Range', `bytes */${fileSize}`).end();
+      return;
+    }
+
     const chunksize = end - start + 1;
     const file = fs.createReadStream(filepath, { start, end });
     const head = {
@@ -545,6 +726,7 @@ app.get('/api/videos/stream/:id', (req: Request, res: Response) => {
     const head = {
       'Content-Length': fileSize,
       'Content-Type': 'video/mp4',
+      'Accept-Ranges': 'bytes',
     };
     res.writeHead(200, head);
     fs.createReadStream(filepath).pipe(res);
@@ -558,19 +740,56 @@ app.get('/api/thumbnails/:id', (req: Request, res: Response) => {
 
   if (fs.existsSync(thumbPath)) {
     res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
     return fs.createReadStream(thumbPath).pipe(res);
   }
 
   return res.status(404).send('Thumbnail not found');
 });
 
+// Generate and serve instantaneous clip thumbnail at specific timestamp
+app.get('/api/thumbnails/clip/:sourceVideoId', async (req: Request, res: Response) => {
+  try {
+    const { sourceVideoId } = req.params;
+    const timestampSec = Math.max(0, parseFloat(req.query.t as string) || 0);
+
+    const video = videosRegistry.get(sourceVideoId);
+    let filepath = video?.filepath;
+    if (!filepath || !fs.existsSync(filepath)) {
+      const potentialPaths = [
+        path.join(UPLOADS_DIR, `${sourceVideoId}.mp4`),
+        path.join(SAMPLES_DIR, `${sourceVideoId}.mp4`),
+      ];
+      filepath = potentialPaths.find((p) => fs.existsSync(p));
+    }
+
+    if (!filepath || !fs.existsSync(filepath)) {
+      return res.status(404).send('Source video not found');
+    }
+
+    const thumbKey = `clip-${sourceVideoId}-${Math.round(timestampSec * 10)}`;
+    const thumbPath = path.join(THUMBNAILS_DIR, `${thumbKey}.jpg`);
+
+    if (!fs.existsSync(thumbPath)) {
+      await generateThumbnail(filepath, thumbPath, timestampSec);
+    }
+
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return fs.createReadStream(thumbPath).pipe(res);
+  } catch (err) {
+    return res.status(500).send(`Failed to extract clip thumbnail: ${(err as Error).message}`);
+  }
+});
+
 // -------------------------------------------------------------
-// API: AI CLIP ANALYSIS (GEMINI 3.8 FLASH)
+// API: AI CLIP ANALYSIS (NVIDIA NEMOTRON 3.5 SUPER VL + GEMINI FALLBACK)
 // -------------------------------------------------------------
 app.post('/api/ai/analyze', async (req: Request, res: Response) => {
   try {
     const {
       videoId,
+      preferredProvider,
       clipCount = 3,
       clipStyle = 'viral_shorts',
       customPrompt,
@@ -581,16 +800,20 @@ app.post('/api/ai/analyze', async (req: Request, res: Response) => {
       chunkName,
       chunkOffsetSeconds,
       previouslySelectedClips,
+      privacyConsent,
     } = req.body;
 
     const video = videosRegistry.get(videoId);
-    if (!video) {
-      return res.status(404).json({ error: 'Source video not found' });
+    if (!video || !fs.existsSync(video.filepath)) {
+      return res.status(404).json({ error: 'Source video not found on disk' });
     }
 
-    const clips = await analyzeVideoWithGemini({
-      duration: video.duration,
+    const result = await dispatchVideoAnalysis({
+      preferredProvider,
+      sourceVideoId: video.id,
+      sourcePath: video.filepath,
       filename: video.originalName,
+      duration: video.duration,
       clipCount: Number(clipCount) || 3,
       clipStyle,
       customPrompt,
@@ -600,12 +823,16 @@ app.post('/api/ai/analyze', async (req: Request, res: Response) => {
       targetPlatforms,
       chunkName: chunkName || 'chunk_01',
       chunkOffsetSeconds: Number(chunkOffsetSeconds) || 0,
+      privacyConsent: privacyConsent !== false,
       previouslySelectedClips: Array.isArray(previouslySelectedClips) ? previouslySelectedClips : [],
     });
 
     return res.json({
       success: true,
-      clips,
+      clips: result.clips,
+      providerUsed: result.providerUsed,
+      modelUsed: result.modelUsed,
+      stagesCompleted: result.stagesCompleted,
       sourceVideo: video,
     });
   } catch (error) {
@@ -747,17 +974,64 @@ app.get('/api/clips/status/:jobId', (req: Request, res: Response) => {
   return res.json({ job });
 });
 
-// Download rendered MP4 clip
+// Download rendered MP4 clip with safe headers and active download tracking
 app.get('/api/clips/download/:jobId', (req: Request, res: Response) => {
   const { jobId } = req.params;
   const job = renderJobsRegistry.get(jobId);
 
   if (!job || !job.outputPath || !fs.existsSync(job.outputPath)) {
-    return res.status(404).send('Rendered clip not found or still processing');
+    return res.status(404).json({ error: 'Rendered clip not found or still processing' });
   }
 
-  const filename = `${job.title.replace(/[^a-zA-Z0-9_-]/g, '_')}_${job.aspectRatio.replace(':', 'x')}.mp4`;
-  res.download(job.outputPath, filename);
+  const stat = fs.statSync(job.outputPath);
+  const safeTitle = (job.title || 'clip').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const safeAspect = (job.aspectRatio || '9x16').replace(':', 'x');
+  const safeFilename = `${safeTitle}_${safeAspect}.mp4`;
+
+  activeDownloads.add(jobId);
+  res.setHeader('Content-Type', 'video/mp4');
+  res.setHeader('Content-Length', stat.size);
+  res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
+
+  const stream = fs.createReadStream(job.outputPath);
+  stream.on('end', () => {
+    activeDownloads.delete(jobId);
+  });
+  stream.on('error', () => {
+    activeDownloads.delete(jobId);
+  });
+  res.on('close', () => {
+    activeDownloads.delete(jobId);
+  });
+
+  stream.pipe(res);
+});
+
+// Delete a rendered clip from server without affecting already downloaded files
+app.delete('/api/clips/render/:jobId', async (req: Request, res: Response) => {
+  try {
+    const { jobId } = req.params;
+    const job = renderJobsRegistry.get(jobId);
+
+    if (activeDownloads.has(jobId)) {
+      return res.status(409).json({ error: 'Cannot delete clip while an active download is in progress' });
+    }
+
+    if (job?.outputPath && fs.existsSync(job.outputPath)) {
+      try {
+        fs.unlinkSync(job.outputPath);
+      } catch (err) {
+        console.warn(`Could not remove rendered file ${job.outputPath}:`, err);
+      }
+    }
+
+    renderJobsRegistry.delete(jobId);
+    await deleteRenderJob(jobId);
+
+    return res.json({ success: true, message: 'Render job and output file removed from server' });
+  } catch (error) {
+    return res.status(500).json({ error: (error as Error).message });
+  }
 });
 
 // Stream rendered MP4 clip for in-browser playback
@@ -897,6 +1171,16 @@ app.post('/api/projects', async (req: Request, res: Response) => {
   } catch (error) {
     return res.status(500).json({ error: (error as Error).message });
   }
+});
+
+// -------------------------------------------------------------
+// STRICT API 404 HANDLER (PREVENT VITE SPA HTML FALLBACK)
+// -------------------------------------------------------------
+app.all('/api/*', (req: Request, res: Response) => {
+  return res.status(404).json({
+    error: `API endpoint not found: ${req.method} ${req.originalUrl}`,
+    status: 404,
+  });
 });
 
 // -------------------------------------------------------------

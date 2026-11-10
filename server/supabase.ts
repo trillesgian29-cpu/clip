@@ -16,6 +16,7 @@ interface LocalDatabase {
   projects: ProjectData[];
   renderedClips: RenderJob[];
   publishedClips: PublishedClip[];
+  videos: VideoMetadata[];
 }
 
 function loadLocalDb(): LocalDatabase {
@@ -27,12 +28,13 @@ function loadLocalDb(): LocalDatabase {
         projects: parsed.projects || [],
         renderedClips: parsed.renderedClips || [],
         publishedClips: parsed.publishedClips || [],
+        videos: parsed.videos || [],
       };
     }
   } catch (err) {
     console.error('Error loading local db:', err);
   }
-  return { projects: [], renderedClips: [], publishedClips: [] };
+  return { projects: [], renderedClips: [], publishedClips: [], videos: [] };
 }
 
 function saveLocalDb(db: LocalDatabase) {
@@ -347,4 +349,65 @@ export async function deletePublishedClip(id: string): Promise<boolean> {
 
   return true;
 }
+
+/**
+ * Save / Update Video Metadata in persistent registry
+ */
+export async function saveVideoRecord(video: VideoMetadata): Promise<VideoMetadata> {
+  const localDb = loadLocalDb();
+  const existingIdx = localDb.videos.findIndex((v) => v.id === video.id);
+  if (existingIdx >= 0) {
+    localDb.videos[existingIdx] = video;
+  } else {
+    localDb.videos.unshift(video);
+  }
+  saveLocalDb(localDb);
+  return video;
+}
+
+/**
+ * Retrieve all registered videos from persistent storage
+ */
+export async function getVideos(): Promise<VideoMetadata[]> {
+  const localDb = loadLocalDb();
+  return localDb.videos;
+}
+
+/**
+ * Retrieve single video metadata by id
+ */
+export async function getVideo(id: string): Promise<VideoMetadata | null> {
+  const localDb = loadLocalDb();
+  return localDb.videos.find((v) => v.id === id) || null;
+}
+
+/**
+ * Delete video metadata record
+ */
+export async function deleteVideoRecord(id: string): Promise<boolean> {
+  const localDb = loadLocalDb();
+  localDb.videos = localDb.videos.filter((v) => v.id !== id);
+  saveLocalDb(localDb);
+  return true;
+}
+
+/**
+ * Delete a rendered clip record from database
+ */
+export async function deleteRenderJob(id: string): Promise<boolean> {
+  const localDb = loadLocalDb();
+  localDb.renderedClips = localDb.renderedClips.filter((r) => r.id !== id);
+  saveLocalDb(localDb);
+
+  if (supabaseClient) {
+    try {
+      await supabaseClient.from('clipgenius_rendered_clips').delete().eq('id', id);
+    } catch (err) {
+      console.warn('Failed to delete render job from Supabase:', err);
+    }
+  }
+
+  return true;
+}
+
 

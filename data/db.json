@@ -1,0 +1,74 @@
+{
+  "projects": [],
+  "renderedClips": [],
+  "publishedClips": [
+    {
+      "id": "pub-1794327224715-440",
+      "clipId": "clip-curated-1",
+      "title": "The 2026 AI Secret",
+      "hook": "Nobody is talking about this yet, but it changes everything.",
+      "platform": "tiktok",
+      "postCaption": "The 2026 AI Secret\n\nNobody is talking about this yet, but it changes everything.\n\n#viral #shorts #tech",
+      "hashtags": [
+        "#viral",
+        "#shorts",
+        "#tech"
+      ],
+      "publishedAt": "2026-11-10T16:13:44.715Z",
+      "status": "published"
+    }
+  ],
+  "videos": [
+    {
+      "id": "sample-podcast-1794327145381",
+      "filename": "sample-podcast-1794327145381.mp4",
+      "originalName": "Podcast Masterclass: Building Tech in 2026.mp4",
+      "filepath": "/app/applet/samples/sample-podcast-1794327145381.mp4",
+      "url": "/api/videos/stream/sample-podcast-1794327145381",
+      "duration": 65,
+      "width": 1920,
+      "height": 1080,
+      "aspectRatio": "1920:1080",
+      "format": "mp4",
+      "size": 7050664,
+      "bitrate": 785813,
+      "fps": 30,
+      "hasAudio": true,
+      "uploadedAt": "2026-11-10T16:12:58.034Z"
+    },
+    {
+      "id": "sample-1794327136630-65",
+      "filename": "sample-podcast-1794235524195.mp4",
+      "originalName": "sample-podcast-1794235524195.mp4",
+      "filepath": "/app/applet/samples/sample-podcast-1794235524195.mp4",
+      "url": "/api/videos/stream/sample-1794327136630-65",
+      "duration": 65,
+      "width": 1920,
+      "height": 1080,
+      "aspectRatio": "1920:1080",
+      "format": "mov,mp4,m4a,3gp,3g2,mj2",
+      "size": 7050664,
+      "bitrate": 785813,
+      "fps": 30,
+      "hasAudio": true,
+      "uploadedAt": "2026-11-10T15:56:03.742Z"
+    },
+    {
+      "id": "vid-1794327136384-986",
+      "filename": "video-upl-1794238549734-29442cf3b442416b-chunk_test.mp4",
+      "originalName": "video-upl-1794238549734-29442cf3b442416b-chunk_test.mp4",
+      "filepath": "/app/applet/uploads/video-upl-1794238549734-29442cf3b442416b-chunk_test.mp4",
+      "url": "/api/videos/stream/vid-1794327136384-986",
+      "duration": 15,
+      "width": 640,
+      "height": 360,
+      "aspectRatio": "640:360",
+      "format": "mov,mp4,m4a,3gp,3g2,mj2",
+      "size": 474244,
+      "bitrate": 179722,
+      "fps": 24,
+      "hasAudio": true,
+      "uploadedAt": "2026-11-10T15:56:03.717Z"
+    }
+  ]
+}
