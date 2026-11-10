@@ -4,6 +4,7 @@ import {
   RenderJob,
   ProjectData,
   SystemStatus,
+  PublishedClip,
 } from '../types/index.ts';
 import { getSupabaseClient } from './supabaseClient.ts';
 
@@ -142,6 +143,12 @@ export const api = {
     clipStyle?: string;
     customPrompt?: string;
     transcript?: string;
+    videoCategory?: string;
+    targetAudience?: string;
+    targetPlatforms?: string[];
+    chunkName?: string;
+    chunkOffsetSeconds?: number;
+    previouslySelectedClips?: ClipSuggestion[];
   }): Promise<{ clips: ClipSuggestion[]; sourceVideo: VideoMetadata }> {
     const res = await safeFetch('/api/ai/analyze', {
       method: 'POST',
@@ -231,6 +238,59 @@ export const api = {
 
   async cancelUpload(uploadId: string): Promise<void> {
     await safeFetch(`/api/upload/cancel/${uploadId}`, { method: 'DELETE' });
+  },
+
+  // Validation Check
+  async validateClip(params: {
+    clip: Partial<ClipSuggestion>;
+    videoDuration: number;
+    transcript?: string;
+  }): Promise<{ isValid: boolean; errors: string[] }> {
+    const res = await safeFetch('/api/clips/validate', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(params),
+    });
+    if (!res.ok) throw new Error('Validation check failed');
+    return res.json();
+  },
+
+  // Individual Clip Publishing
+  async publishClip(payload: {
+    clipId: string;
+    projectId?: string;
+    title: string;
+    hook: string;
+    platform: 'tiktok' | 'reels' | 'shorts' | 'facebook' | 'all';
+    postCaption?: string;
+    hashtags?: string[];
+    videoUrl?: string;
+    downloadUrl?: string;
+    renderJobId?: string;
+    scheduledFor?: string;
+  }): Promise<{ success: boolean; publishedClip: PublishedClip; message: string }> {
+    const res = await safeFetch('/api/clips/publish', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Publishing failed');
+    return data;
+  },
+
+  async getPublishedClips(): Promise<PublishedClip[]> {
+    const res = await safeFetch('/api/clips/published');
+    const data = await res.json();
+    return data.published || [];
+  },
+
+  async deletePublishedClip(id: string): Promise<void> {
+    const res = await safeFetch(`/api/clips/publish/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error('Failed to unpublish clip');
   },
 
   // Client-side Supabase instance (configured with non-mutating native fetch wrapper)

@@ -1,7 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
-import { ProjectData, RenderJob, VideoMetadata } from '../src/types/index.ts';
+import { ProjectData, RenderJob, VideoMetadata, PublishedClip } from '../src/types/index.ts';
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 const LOCAL_DB_PATH = path.join(DATA_DIR, 'db.json');
@@ -15,18 +15,24 @@ if (!fs.existsSync(DATA_DIR)) {
 interface LocalDatabase {
   projects: ProjectData[];
   renderedClips: RenderJob[];
+  publishedClips: PublishedClip[];
 }
 
 function loadLocalDb(): LocalDatabase {
   try {
     if (fs.existsSync(LOCAL_DB_PATH)) {
       const data = fs.readFileSync(LOCAL_DB_PATH, 'utf-8');
-      return JSON.parse(data);
+      const parsed = JSON.parse(data);
+      return {
+        projects: parsed.projects || [],
+        renderedClips: parsed.renderedClips || [],
+        publishedClips: parsed.publishedClips || [],
+      };
     }
   } catch (err) {
     console.error('Error loading local db:', err);
   }
-  return { projects: [], renderedClips: [] };
+  return { projects: [], renderedClips: [], publishedClips: [] };
 }
 
 function saveLocalDb(db: LocalDatabase) {
@@ -119,6 +125,23 @@ CREATE TABLE IF NOT EXISTS clipgenius_rendered_clips (
   duration NUMERIC,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   completed_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS clipgenius_published_clips (
+  id TEXT PRIMARY KEY,
+  clip_id TEXT NOT NULL,
+  project_id TEXT,
+  title TEXT NOT NULL,
+  hook TEXT NOT NULL,
+  platform TEXT NOT NULL,
+  post_caption TEXT,
+  hashtags JSONB DEFAULT '[]'::jsonb,
+  video_url TEXT,
+  download_url TEXT,
+  render_job_id TEXT,
+  published_at TIMESTAMPTZ DEFAULT NOW(),
+  status TEXT DEFAULT 'published',
+  scheduled_for TIMESTAMPTZ
 );
 `;
 
@@ -227,3 +250,101 @@ export async function saveRenderJobRecord(job: RenderJob): Promise<void> {
     }
   }
 }
+
+/**
+ * Save an individually published clip record
+ */
+export async function savePublishedClip(clip: PublishedClip): Promise<PublishedClip> {
+  const localDb = loadLocalDb();
+  const existingIdx = localDb.publishedClips.findIndex((c) => c.id === clip.id);
+  if (existingIdx >= 0) {
+    localDb.publishedClips[existingIdx] = clip;
+  } else {
+    localDb.publishedClips.unshift(clip);
+  }
+  saveLocalDb(localDb);
+
+  if (supabaseClient) {
+    try {
+      await supabaseClient.from('clipgenius_published_clips').upsert({
+        id: clip.id,
+        clip_id: clip.clipId,
+        project_id: clip.projectId,
+        title: clip.title,
+        hook: clip.hook,
+        platform: clip.platform,
+        post_caption: clip.postCaption,
+        hashtags: clip.hashtags,
+        video_url: clip.videoUrl,
+        download_url: clip.downloadUrl,
+        render_job_id: clip.renderJobId,
+        published_at: clip.publishedAt,
+        status: clip.status,
+        scheduled_for: clip.scheduledFor,
+      });
+    } catch (err) {
+      console.warn('Failed to save published clip to Supabase:', err);
+    }
+  }
+
+  return clip;
+}
+
+/**
+ * Retrieve all published clips
+ */
+export async function getPublishedClips(): Promise<PublishedClip[]> {
+  const localDb = loadLocalDb();
+
+  if (supabaseClient) {
+    try {
+      const { data, error } = await supabaseClient
+        .from('clipgenius_published_clips')
+        .select('*')
+        .order('published_at', { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        return data.map((row) => ({
+          id: row.id,
+          clipId: row.clip_id,
+          projectId: row.project_id,
+          title: row.title,
+          hook: row.hook,
+          platform: row.platform,
+          postCaption: row.post_caption,
+          hashtags: Array.isArray(row.hashtags) ? row.hashtags : [],
+          videoUrl: row.video_url,
+          downloadUrl: row.download_url,
+          renderJobId: row.render_job_id,
+          publishedAt: row.published_at,
+          status: row.status,
+          scheduledFor: row.scheduled_for,
+        }));
+      }
+    } catch (err) {
+      console.warn('Failed to query published clips in Supabase, using local db:', err);
+    }
+  }
+
+  return localDb.publishedClips;
+}
+
+/**
+ * Delete a published clip record
+ */
+export async function deletePublishedClip(id: string): Promise<boolean> {
+  const localDb = loadLocalDb();
+  localDb.publishedClips = localDb.publishedClips.filter((c) => c.id !== id);
+  saveLocalDb(localDb);
+
+  if (supabaseClient) {
+    try {
+      await supabaseClient.from('clipgenius_published_clips').delete().eq('id', id);
+    } catch (err) {
+      console.warn('Failed to delete published clip from Supabase:', err);
+    }
+  }
+
+  return true;
+}
+

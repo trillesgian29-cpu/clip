@@ -11,7 +11,7 @@ import {
   generateThumbnail,
   renderClip,
 } from './server/ffmpeg.ts';
-import { analyzeVideoWithGemini } from './server/gemini.ts';
+import { analyzeVideoWithGemini, validateClipTimestampsAndQuote } from './server/gemini.ts';
 import {
   createSessionToken,
   verifyPasscode,
@@ -25,6 +25,9 @@ import {
   saveProject,
   getProjects,
   saveRenderJobRecord,
+  savePublishedClip,
+  getPublishedClips,
+  deletePublishedClip,
   SUPABASE_SCHEMA_SQL,
 } from './server/supabase.ts';
 import {
@@ -43,7 +46,7 @@ import {
   getJobStatus,
 } from './server/jobQueue.ts';
 import { getStorageArchitectureInfo } from './server/storage.ts';
-import { VideoMetadata, RenderJob, ProjectData } from './src/types/index.ts';
+import { VideoMetadata, RenderJob, ProjectData, PublishedClip } from './src/types/index.ts';
 
 dotenv.config();
 
@@ -566,7 +569,19 @@ app.get('/api/thumbnails/:id', (req: Request, res: Response) => {
 // -------------------------------------------------------------
 app.post('/api/ai/analyze', async (req: Request, res: Response) => {
   try {
-    const { videoId, clipCount = 4, clipStyle = 'viral_shorts', customPrompt, transcript } = req.body;
+    const {
+      videoId,
+      clipCount = 3,
+      clipStyle = 'viral_shorts',
+      customPrompt,
+      transcript,
+      videoCategory,
+      targetAudience,
+      targetPlatforms,
+      chunkName,
+      chunkOffsetSeconds,
+      previouslySelectedClips,
+    } = req.body;
 
     const video = videosRegistry.get(videoId);
     if (!video) {
@@ -576,10 +591,16 @@ app.post('/api/ai/analyze', async (req: Request, res: Response) => {
     const clips = await analyzeVideoWithGemini({
       duration: video.duration,
       filename: video.originalName,
-      clipCount: Number(clipCount) || 4,
+      clipCount: Number(clipCount) || 3,
       clipStyle,
       customPrompt,
       transcript,
+      videoCategory,
+      targetAudience,
+      targetPlatforms,
+      chunkName: chunkName || 'chunk_01',
+      chunkOffsetSeconds: Number(chunkOffsetSeconds) || 0,
+      previouslySelectedClips: Array.isArray(previouslySelectedClips) ? previouslySelectedClips : [],
     });
 
     return res.json({
@@ -589,6 +610,21 @@ app.post('/api/ai/analyze', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('AI Analysis failed:', error);
+    return res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// Endpoint to independently validate clip timestamps and quote before render/publish
+app.post('/api/clips/validate', (req: Request, res: Response) => {
+  try {
+    const { clip, videoDuration, transcript } = req.body;
+    if (!clip || typeof videoDuration !== 'number') {
+      return res.status(400).json({ error: 'Missing clip object or videoDuration' });
+    }
+
+    const validation = validateClipTimestampsAndQuote(clip, videoDuration, transcript);
+    return res.json(validation);
+  } catch (error) {
     return res.status(500).json({ error: (error as Error).message });
   }
 });
@@ -758,6 +794,82 @@ app.get('/api/clips/stream/:jobId', (req: Request, res: Response) => {
     };
     res.writeHead(200, head);
     fs.createReadStream(job.outputPath).pipe(res);
+  }
+});
+
+// -------------------------------------------------------------
+// API: INDIVIDUAL CLIP PUBLISHING WORKFLOW & SUPABASE SYNC
+// -------------------------------------------------------------
+
+// Publish an individual reviewed clip
+app.post('/api/clips/publish', async (req: Request, res: Response) => {
+  try {
+    const {
+      clipId,
+      projectId,
+      title,
+      hook,
+      platform = 'tiktok',
+      postCaption,
+      hashtags = [],
+      videoUrl,
+      downloadUrl,
+      renderJobId,
+      scheduledFor,
+    } = req.body;
+
+    if (!clipId || !title || !hook) {
+      return res.status(400).json({ error: 'Missing required clip publishing fields (clipId, title, hook)' });
+    }
+
+    const publishedRecord: PublishedClip = {
+      id: `pub-${Date.now()}-${Math.round(Math.random() * 1000)}`,
+      clipId,
+      projectId: projectId || undefined,
+      title,
+      hook,
+      platform: platform as any,
+      postCaption: postCaption || `${title}\n\n"${hook}"\n\n${(hashtags || []).join(' ')}`,
+      hashtags: Array.isArray(hashtags) ? hashtags : ['#viral', '#shorts', '#trending'],
+      videoUrl: videoUrl || (renderJobId ? `/api/clips/stream/${renderJobId}` : undefined),
+      downloadUrl: downloadUrl || (renderJobId ? `/api/clips/download/${renderJobId}` : undefined),
+      renderJobId: renderJobId || undefined,
+      publishedAt: new Date().toISOString(),
+      status: scheduledFor ? 'scheduled' : 'published',
+      scheduledFor: scheduledFor || undefined,
+    };
+
+    const saved = await savePublishedClip(publishedRecord);
+
+    return res.status(201).json({
+      success: true,
+      publishedClip: saved,
+      message: `Clip "${title}" successfully published for ${platform.toUpperCase()}`,
+    });
+  } catch (error) {
+    console.error('Failed to publish clip:', error);
+    return res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// Retrieve all individually published clips
+app.get('/api/clips/published', async (_req: Request, res: Response) => {
+  try {
+    const published = await getPublishedClips();
+    return res.json({ published });
+  } catch (error) {
+    return res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// Remove/unpublish a published clip record
+app.delete('/api/clips/publish/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await deletePublishedClip(id);
+    return res.json({ success: true, message: 'Published clip record removed' });
+  } catch (error) {
+    return res.status(500).json({ error: (error as Error).message });
   }
 });
 

@@ -21,7 +21,8 @@ import { VideoUploader } from './components/VideoUploader.tsx';
 import { VideoPlayer } from './components/VideoPlayer.tsx';
 import { AiAnalysisPanel } from './components/AiAnalysisPanel.tsx';
 import { ClipCard } from './components/ClipCard.tsx';
-import { RenderQueue } from './components/RenderQueue.tsx';
+import { ClipReviewModal } from './components/ClipReviewModal.tsx';
+import { PublishClipModal } from './components/PublishClipModal.tsx';
 import { api } from './services/api.ts';
 import {
   VideoMetadata,
@@ -29,6 +30,7 @@ import {
   RenderJob,
   ProjectData,
   SystemStatus,
+  PublishedClip,
 } from './types/index.ts';
 
 export default function App() {
@@ -44,6 +46,12 @@ export default function App() {
   const [renderJobs, setRenderJobs] = useState<RenderJob[]>([]);
   const [aspectRatioPreview, setAspectRatioPreview] = useState<'9:16' | '1:1' | '16:9'>('9:16');
 
+  // Review-First & Individual Publishing Workflow States
+  const [reviewingClip, setReviewingClip] = useState<ClipSuggestion | null>(null);
+  const [publishingClip, setPublishingClip] = useState<ClipSuggestion | null>(null);
+  const [publishedClips, setPublishedClips] = useState<PublishedClip[]>([]);
+  const [clipFilter, setClipFilter] = useState<'all' | 'needs_review' | 'approved' | 'published'>('all');
+
   // Loading States
   const [isVideoLoading, setIsVideoLoading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -57,13 +65,15 @@ export default function App() {
     setTimeout(() => setToast(null), 4000);
   };
 
-  // Check initial system health & authentication
+  // Check initial system health, authentication & load published clips
   const fetchSystem = async () => {
     try {
       const status = await api.getSystemStatus();
       setSystemStatus(status);
       const isAuth = await api.checkAuth();
       setIsAuthenticated(isAuth);
+      const pubs = await api.getPublishedClips();
+      setPublishedClips(pubs);
     } catch (err) {
       console.warn('System status check warning:', err);
     }

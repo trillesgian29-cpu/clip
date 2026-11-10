@@ -16,21 +16,75 @@ export interface VideoMetadata {
   uploadedAt: string;
 }
 
+export interface ViralScores {
+  hook: number;
+  standalone: number;
+  emotion: number;
+  payoff: number;
+  share_worthy: number;
+  pacing: number;
+  visual_potential: number;
+  overall_average: number;
+}
+
+export interface StoryStructure {
+  opening: string;
+  context: string;
+  curiosity: string;
+  payoff: string;
+}
+
 export interface ClipSuggestion {
   id: string;
   title: string;
   hook: string;
   description: string;
-  startTime: number; // seconds
-  endTime: number; // seconds
+  startTime: number; // seconds (global)
+  endTime: number; // seconds (global)
   duration: number; // seconds
-  viralityScore: number; // 1-100
+  viralityScore: number; // 1-100 (for backward compatibility)
   viralityReason: string;
   targetPlatform: 'tiktok' | 'reels' | 'shorts' | 'all';
   suggestedAspectRatio: '9:16' | '1:1' | '16:9';
   captions?: string;
   hashtags: string[];
   keyQuotes?: string[];
+  // New Viral Detection & Review Fields
+  clip_id?: string;
+  local_start?: string;
+  local_end?: string;
+  global_start_seconds?: number;
+  global_end_seconds?: number;
+  duration_seconds?: number;
+  exact_quote?: string;
+  reason?: string;
+  scores?: ViralScores;
+  weakness?: string;
+  alternate_hooks?: string[];
+  story_structure?: StoryStructure;
+  selection_status?: 'qualified' | 'rejected';
+  reviewStatus?: 'needs_review' | 'approved' | 'rejected';
+  publishStatus?: 'draft' | 'ready_to_publish' | 'published';
+  publishedAt?: string;
+  publishedPlatform?: 'tiktok' | 'reels' | 'shorts' | 'facebook' | 'all';
+  publishedId?: string;
+}
+
+export interface PublishedClip {
+  id: string;
+  clipId: string;
+  projectId?: string;
+  title: string;
+  hook: string;
+  platform: 'tiktok' | 'reels' | 'shorts' | 'facebook' | 'all';
+  postCaption: string;
+  hashtags: string[];
+  videoUrl?: string;
+  downloadUrl?: string;
+  renderJobId?: string;
+  publishedAt: string;
+  status: 'published' | 'scheduled';
+  scheduledFor?: string;
 }
 
 export interface RenderJob {

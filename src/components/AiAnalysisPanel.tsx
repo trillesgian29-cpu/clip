@@ -25,8 +25,11 @@ export const AiAnalysisPanel: React.FC<AiAnalysisPanelProps> = ({
   isAnalyzing,
   setIsAnalyzing,
 }) => {
-  const [clipCount, setClipCount] = useState(4);
+  const [clipCount, setClipCount] = useState(3);
   const [clipStyle, setClipStyle] = useState<'viral_shorts' | 'punchy_hooks' | 'educational' | 'storytelling'>('viral_shorts');
+  const [videoCategory, setVideoCategory] = useState('Podcast & Interview');
+  const [targetAudience, setTargetAudience] = useState('Short-form viewers (TikTok, Shorts, Reels)');
+  const [chunkOffsetSeconds, setChunkOffsetSeconds] = useState(0);
   const [customPrompt, setCustomPrompt] = useState('');
   const [transcript, setTranscript] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -34,11 +37,11 @@ export const AiAnalysisPanel: React.FC<AiAnalysisPanelProps> = ({
 
   const handleStartAnalysis = async () => {
     setIsAnalyzing(true);
-    setAnalysisStep('Scanning video timeline & audio waveforms...');
+    setAnalysisStep('Scanning video timeline & 15-min chunk offsets...');
 
     try {
-      setTimeout(() => setAnalysisStep('Running Gemini 3.8 Flash hook detection & retention curves...'), 1200);
-      setTimeout(() => setAnalysisStep('Calculating Virality Scores (1-100) and platform tags...'), 2400);
+      setTimeout(() => setAnalysisStep('Running Gemini 3.8 Flash strict viral scoring (Threshold ≥ 8/10)...'), 1000);
+      setTimeout(() => setAnalysisStep('Evaluating 0-3s hooks, story progression, and weakness analysis...'), 2000);
 
       const result = await api.analyzeVideo({
         videoId: video.id,
@@ -46,9 +49,14 @@ export const AiAnalysisPanel: React.FC<AiAnalysisPanelProps> = ({
         clipStyle,
         customPrompt: customPrompt.trim() || undefined,
         transcript: transcript.trim() || undefined,
+        videoCategory,
+        targetAudience,
+        targetPlatforms: ['TikTok', 'YouTube Shorts', 'Instagram Reels', 'Facebook Reels'],
+        chunkName: `part_${Math.floor(chunkOffsetSeconds / 900) + 1}`,
+        chunkOffsetSeconds,
       });
 
-      setAnalysisStep('Curating multi-clip timestamps and metadata...');
+      setAnalysisStep('Curating qualified candidates & alternate hook options...');
       setTimeout(() => {
         onClipsGenerated(result.clips);
         setIsAnalyzing(false);
@@ -137,6 +145,42 @@ export const AiAnalysisPanel: React.FC<AiAnalysisPanelProps> = ({
 
         {showAdvanced && (
           <div className="mt-3 space-y-3 pt-3 border-t border-neutral-800/80">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-neutral-300 mb-1">
+                  Video Niche / Category
+                </label>
+                <select
+                  value={videoCategory}
+                  onChange={(e) => setVideoCategory(e.target.value)}
+                  className="w-full rounded-xl border border-neutral-700 bg-neutral-950 px-3 py-2 text-xs text-white focus:border-violet-500 focus:outline-none"
+                >
+                  <option value="Podcast & Interview">🎙️ Podcast & Interview</option>
+                  <option value="Tech, AI & Engineering">💻 Tech, AI & Engineering</option>
+                  <option value="Business, Finance & Startups">📈 Business & Finance</option>
+                  <option value="Gaming & Esports">🎮 Gaming & Streaming</option>
+                  <option value="Comedy & Entertainment">🎭 Comedy & Reactions</option>
+                  <option value="Educational & Science">🔬 Science & Education</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-neutral-300 mb-1">
+                  15-Min Chunk Offset (s)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max={Math.max(0, video.duration - 30)}
+                  step="60"
+                  value={chunkOffsetSeconds}
+                  onChange={(e) => setChunkOffsetSeconds(parseInt(e.target.value, 10) || 0)}
+                  className="w-full rounded-xl border border-neutral-700 bg-neutral-950 px-3 py-2 text-xs font-mono text-white focus:border-violet-500 focus:outline-none"
+                  placeholder="0 for 00:00 - 15:00"
+                />
+              </div>
+            </div>
+
             <div>
               <label className="block text-xs font-medium text-neutral-300 mb-1">
                 Custom Creator Prompt
@@ -151,11 +195,11 @@ export const AiAnalysisPanel: React.FC<AiAnalysisPanelProps> = ({
             </div>
             <div>
               <label className="block text-xs font-medium text-neutral-300 mb-1">
-                Transcript / Closed Captions Snippet (Optional)
+                Timestamped Transcript / Closed Captions (Mandatory for Exact Quotes)
               </label>
               <textarea
                 rows={2}
-                placeholder="Paste key dialogue or quotes to guide hook extraction..."
+                placeholder="Paste chunk dialogue e.g. [01:23] Host: 'Wait till you hear this reveal...'..."
                 value={transcript}
                 onChange={(e) => setTranscript(e.target.value)}
                 className="w-full rounded-xl border border-neutral-700 bg-neutral-950 px-3 py-2 text-xs text-white placeholder-neutral-500 focus:border-violet-500 focus:outline-none"

@@ -9,6 +9,7 @@ import {
   Check,
   Cpu,
   Share2,
+  ShieldCheck,
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
@@ -21,6 +22,8 @@ interface ClipCardProps {
   onPreview: (clip: ClipSuggestion) => void;
   onRender: (clip: ClipSuggestion, aspectRatio: '9:16' | '1:1' | '16:9') => void;
   onUpdateTimes: (clipId: string, startTime: number, endTime: number) => void;
+  onReview?: (clip: ClipSuggestion) => void;
+  onPublish?: (clip: ClipSuggestion) => void;
   maxDuration: number;
 }
 
@@ -31,6 +34,8 @@ export const ClipCard: React.FC<ClipCardProps> = ({
   onPreview,
   onRender,
   onUpdateTimes,
+  onReview,
+  onPublish,
   maxDuration,
 }) => {
   const [aspectRatio, setAspectRatio] = useState<'9:16' | '1:1' | '16:9'>(
@@ -112,8 +117,44 @@ export const ClipCard: React.FC<ClipCardProps> = ({
               <span className="rounded bg-neutral-800 px-2 py-0.5 text-[11px] font-medium text-neutral-400">
                 {clip.targetPlatform.toUpperCase()}
               </span>
+              {/* Review / Publish Lifecycle Status */}
+              <span
+                className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                  clip.publishStatus === 'published'
+                    ? 'bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30'
+                    : clip.reviewStatus === 'approved'
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                    : clip.reviewStatus === 'rejected'
+                    ? 'bg-red-500/20 text-red-300 border border-red-500/30'
+                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                }`}
+              >
+                {clip.publishStatus === 'published'
+                  ? 'Published'
+                  : clip.reviewStatus === 'approved'
+                  ? 'Approved'
+                  : clip.reviewStatus === 'rejected'
+                  ? 'Rejected'
+                  : 'Needs Review'}
+              </span>
             </div>
             <h4 className="mt-1.5 text-base font-bold text-white tracking-tight">{clip.title}</h4>
+            {/* Viral Metrics Breakdown Pills */}
+            {clip.scores && (
+              <div className="flex items-center gap-2 mt-1.5 text-[10px]">
+                <span className="text-neutral-400">
+                  Hook: <strong className="text-white font-mono">{clip.scores.hook.toFixed(1)}</strong>
+                </span>
+                <span className="text-neutral-600">•</span>
+                <span className="text-neutral-400">
+                  Standalone: <strong className="text-white font-mono">{clip.scores.standalone.toFixed(1)}</strong>
+                </span>
+                <span className="text-neutral-600">•</span>
+                <span className="text-neutral-400">
+                  Payoff: <strong className="text-white font-mono">{clip.scores.payoff.toFixed(1)}</strong>
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Virality Score Badge */}
@@ -212,23 +253,54 @@ export const ClipCard: React.FC<ClipCardProps> = ({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <button
+              type="button"
               onClick={() => onPreview(clip)}
-              className="flex items-center gap-1 rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1.5 text-xs font-medium text-neutral-200 hover:bg-neutral-700 transition"
+              className="flex items-center gap-1 rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs font-medium text-neutral-200 hover:bg-neutral-700 transition"
               title="Preview clip segment in video player"
             >
-              <Play className="h-3.5 w-3.5 fill-current" />
+              <Play className="h-3 w-3 fill-current" />
               <span>Preview</span>
             </button>
 
+            {onReview && (
+              <button
+                type="button"
+                onClick={() => onReview(clip)}
+                className="flex items-center gap-1 rounded-lg border border-violet-500/40 bg-violet-950/40 px-2.5 py-1.5 text-xs font-semibold text-violet-300 hover:bg-violet-900/50 transition"
+                title="Review viral metrics, story structure, weaknesses & alternate hooks"
+              >
+                <ShieldCheck className="h-3.5 w-3.5 text-violet-400" />
+                <span>Review</span>
+              </button>
+            )}
+
             <button
+              type="button"
               onClick={() => onRender(clip, aspectRatio)}
-              className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-md shadow-violet-600/20 hover:from-violet-500 hover:to-indigo-500 transition"
+              className="flex items-center gap-1 rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1.5 text-xs font-semibold text-neutral-200 hover:bg-neutral-700 transition"
+              title="Render vertical MP4 via FFmpeg"
             >
-              <Cpu className="h-3.5 w-3.5" />
-              <span>Render MP4</span>
+              <Cpu className="h-3.5 w-3.5 text-indigo-400" />
+              <span>Render</span>
             </button>
+
+            {onPublish && (
+              <button
+                type="button"
+                onClick={() => onPublish(clip)}
+                className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold transition shadow-md ${
+                  clip.publishStatus === 'published'
+                    ? 'bg-fuchsia-600/30 text-fuchsia-300 border border-fuchsia-500/40 hover:bg-fuchsia-600/40'
+                    : 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-violet-600/20 hover:from-violet-500 hover:to-indigo-500'
+                }`}
+                title="Publish clip individually to TikTok, Shorts, Reels"
+              >
+                <Share2 className="h-3.5 w-3.5" />
+                <span>{clip.publishStatus === 'published' ? 'Published' : 'Publish'}</span>
+              </button>
+            )}
           </div>
         </div>
 
