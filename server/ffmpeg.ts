@@ -1,9 +1,9 @@
-import { exec, spawn } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export interface ProbeResult {
   duration: number;
@@ -33,8 +33,8 @@ export async function checkFfmpegAvailability(): Promise<{
   version?: string;
 }> {
   try {
-    const { stdout: ffmpegOut } = await execAsync('ffmpeg -version');
-    const { stdout: ffprobeOut } = await execAsync('ffprobe -version');
+    const { stdout: ffmpegOut } = await execFileAsync('ffmpeg', ['-version']);
+    await execFileAsync('ffprobe', ['-version']);
     const firstLine = ffmpegOut.split('\n')[0] || '';
 
     return {
@@ -55,16 +55,29 @@ export async function checkFfmpegAvailability(): Promise<{
  * Probe a video file using ffprobe
  */
 export async function probeVideo(filepath: string): Promise<ProbeResult> {
-  const cmd = `ffprobe -v error -select_streams v:0 -show_entries stream=width,height,r_frame_rate,duration,bit_rate -show_entries format=duration,format_name,size -of json "${filepath}"`;
-  const audioCmd = `ffprobe -v error -select_streams a:0 -show_entries stream=codec_type -of json "${filepath}"`;
+  const videoArgs = [
+    '-v', 'error',
+    '-select_streams', 'v:0',
+    '-show_entries', 'stream=width,height,r_frame_rate,duration,bit_rate',
+    '-show_entries', 'format=duration,format_name,size',
+    '-of', 'json',
+    filepath,
+  ];
+  const audioArgs = [
+    '-v', 'error',
+    '-select_streams', 'a:0',
+    '-show_entries', 'stream=codec_type',
+    '-of', 'json',
+    filepath,
+  ];
 
   try {
-    const { stdout } = await execAsync(cmd);
+    const { stdout } = await execFileAsync('ffprobe', videoArgs);
     const probeData = JSON.parse(stdout);
 
     let hasAudio = false;
     try {
-      const { stdout: audioOut } = await execAsync(audioCmd);
+      const { stdout: audioOut } = await execFileAsync('ffprobe', audioArgs);
       const audioData = JSON.parse(audioOut);
       hasAudio = Boolean(audioData.streams && audioData.streams.length > 0);
     } catch {
@@ -110,8 +123,13 @@ export async function generateThumbnail(
   timestampSec: number = 1
 ): Promise<string> {
   const safeTime = Math.max(0, timestampSec);
-  const cmd = `ffmpeg -ss ${safeTime} -i "${videoPath}" -vframes 1 -q:v 2 -y "${outputPath}"`;
-  await execAsync(cmd);
+  await execFileAsync('ffmpeg', [
+    '-ss', String(safeTime),
+    '-i', videoPath,
+    '-vframes', '1',
+    '-q:v', '2',
+    '-y', outputPath,
+  ]);
   return outputPath;
 }
 
@@ -125,8 +143,14 @@ export async function verifyDecodableRange(
 ): Promise<boolean> {
   try {
     const testDuration = Math.min(1.0, Math.max(0.1, (endTime - startTime) / 2));
-    const cmd = `ffmpeg -v error -ss ${startTime.toFixed(3)} -i "${sourcePath}" -t ${testDuration.toFixed(3)} -f null -`;
-    await execAsync(cmd);
+    await execFileAsync('ffmpeg', [
+      '-v', 'error',
+      '-ss', startTime.toFixed(3),
+      '-i', sourcePath,
+      '-t', testDuration.toFixed(3),
+      '-f', 'null',
+      '-',
+    ]);
     return true;
   } catch {
     return false;
@@ -154,8 +178,15 @@ export async function extractSampleFrames(
       const framePath = path.join(tempDir, `frame_${i}_${Math.round(ts)}.jpg`);
 
       try {
-        const cmd = `ffmpeg -v error -ss ${ts.toFixed(3)} -i "${sourcePath}" -vframes 1 -q:v 3 -vf "scale='min(${maxDimension},iw)':-2" -y "${framePath}"`;
-        await execAsync(cmd);
+        await execFileAsync('ffmpeg', [
+          '-v', 'error',
+          '-ss', ts.toFixed(3),
+          '-i', sourcePath,
+          '-vframes', '1',
+          '-q:v', '3',
+          '-vf', `scale='min(${maxDimension},iw)':-2`,
+          '-y', framePath,
+        ]);
 
         if (fs.existsSync(framePath) && fs.statSync(framePath).size > 500) {
           const buffer = fs.readFileSync(framePath);
@@ -298,8 +329,7 @@ export async function renderClip(options: RenderOptions): Promise<string> {
         }
 
         // Validation 3: Run full decode test to guarantee file is not corrupt
-        const decodeTestCmd = `ffmpeg -v error -i "${tempOutputPath}" -f null -`;
-        await execAsync(decodeTestCmd);
+        await execFileAsync('ffmpeg', ['-v', 'error', '-i', tempOutputPath, '-f', 'null', '-']);
 
         // Validation 4: Atomic rename to final output filename
         fs.renameSync(tempOutputPath, outputPath);

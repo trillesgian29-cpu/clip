@@ -19,6 +19,7 @@ import {
   Share2,
   Trash2,
   Filter,
+  Lock,
 } from 'lucide-react';
 import { Navbar } from './components/Navbar.tsx';
 import { AuthModal } from './components/AuthModal.tsx';
@@ -70,25 +71,37 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [currentTab, setCurrentTab] = useState<'clips' | 'queue'>('clips');
 
-  // Notification Banner
+  // Notification Banner & Non-Blocking Confirmations
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
+  const [pendingDeleteVideoId, setPendingDeleteVideoId] = useState<string | null>(null);
+  const [pendingNewSessionConfirm, setPendingNewSessionConfirm] = useState(false);
 
   const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
   };
 
-  // Fetch initial system health, authentication, persistent videos & published clips
+  // Fetch initial system health, authentication, persistent videos, render jobs & published clips
   const fetchInitialData = async () => {
     try {
       const status = await api.getSystemStatus();
       setSystemStatus(status);
       const isAuth = await api.checkAuth();
       setIsAuthenticated(isAuth);
-      const pubs = await api.getPublishedClips();
-      setPublishedClips(pubs);
-      const vids = await api.getVideos();
-      setSavedVideos(vids);
+      if (isAuth) {
+        const [pubs, vids, jobs] = await Promise.all([
+          api.getPublishedClips().catch(() => []),
+          api.getVideos().catch(() => []),
+          api.getRenderJobs().catch(() => []),
+        ]);
+        setPublishedClips(pubs);
+        setSavedVideos(vids);
+        setRenderJobs(jobs);
+      } else {
+        setPublishedClips([]);
+        setSavedVideos([]);
+        setRenderJobs([]);
+      }
     } catch (err) {
       console.warn('Initial data load warning:', err);
     }
@@ -143,10 +156,14 @@ export default function App() {
     showToast(`Loaded source video "${video.originalName}" (${video.duration}s)`, 'success');
   };
 
-  // Delete a saved video from disk & database
+  // Delete a saved video from disk & database (two-step inline confirm)
   const handleDeleteVideo = async (videoId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm('Permanently delete this source video and its cached files?')) return;
+    if (pendingDeleteVideoId !== videoId) {
+      setPendingDeleteVideoId(videoId);
+      return;
+    }
+    setPendingDeleteVideoId(null);
     try {
       await api.deleteVideo(videoId);
       setSavedVideos((prev) => prev.filter((v) => v.id !== videoId));
@@ -286,8 +303,8 @@ export default function App() {
       await api.deleteRenderJob(jobId);
       setRenderJobs((prev) => prev.filter((j) => j.id !== jobId));
       showToast('Render job deleted from server (downloaded files unaffected)', 'info');
-    } catch {
-      setRenderJobs((prev) => prev.filter((j) => j.id !== jobId));
+    } catch (err) {
+      showToast(`Delete failed: ${(err as Error).message}`, 'error');
     }
   };
 
@@ -337,16 +354,20 @@ export default function App() {
     return true;
   });
 
-  // Reset Session
+  // Reset Session (non-blocking confirmation modal)
+  const confirmStartNewSession = () => {
+    setSourceVideo(null);
+    setClips([]);
+    setSelectedClipIds([]);
+    setActiveClip(null);
+    setActivePlayingClipId(null);
+    setPendingNewSessionConfirm(false);
+    showToast('Started fresh session', 'info');
+  };
+
   const handleNewSession = () => {
-    if (sourceVideo && confirm('Start a new session? Current active clips will be cleared.')) {
-      setSourceVideo(null);
-      setClips([]);
-      setSelectedClipIds([]);
-      setActiveClip(null);
-      setActivePlayingClipId(null);
-      showToast('Started fresh session', 'info');
-    }
+    if (!sourceVideo) return;
+    setPendingNewSessionConfirm(true);
   };
 
   return (
@@ -388,11 +409,34 @@ export default function App() {
               </p>
             </div>
 
-            <VideoUploader
-              onVideoLoaded={handleVideoLoaded}
-              isLoading={isVideoLoading}
-              setIsLoading={setIsVideoLoading}
-            />
+            {!isAuthenticated ? (
+              <div className="rounded-2xl border border-amber-500/30 bg-amber-950/20 p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300">
+                    <Lock className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-amber-200">Owner Authentication Required</h3>
+                    <p className="text-xs text-neutral-300 mt-1">
+                      Unlock ClipGenius Studio with the owner passcode to access saved videos, AI analysis, and FFmpeg rendering.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAuthModalOpen(true)}
+                  className="shrink-0 rounded-xl bg-violet-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-violet-500 transition shadow-lg shadow-violet-600/20"
+                >
+                  Unlock Studio
+                </button>
+              </div>
+            ) : (
+              <VideoUploader
+                onVideoLoaded={handleVideoLoaded}
+                isLoading={isVideoLoading}
+                setIsLoading={setIsVideoLoading}
+              />
+            )}
 
             {/* Saved Videos Library (Persistent across server restarts) */}
             {savedVideos.length > 0 && (
@@ -417,14 +461,38 @@ export default function App() {
                           <p className="text-xs font-bold text-white truncate max-w-[200px]" title={v.originalName}>
                             {v.originalName}
                           </p>
-                          <button
-                            type="button"
-                            onClick={(e) => handleDeleteVideo(v.id, e)}
-                            className="text-neutral-500 hover:text-red-400 p-1 rounded transition"
-                            title="Delete from disk"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
+                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            {pendingDeleteVideoId === v.id ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleDeleteVideo(v.id, e)}
+                                  className="px-2 py-0.5 rounded bg-red-600 text-[10px] font-bold text-white hover:bg-red-500 transition"
+                                >
+                                  Confirm
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPendingDeleteVideoId(null);
+                                  }}
+                                  className="px-1.5 py-0.5 rounded bg-neutral-800 text-[10px] text-neutral-300 hover:text-white transition"
+                                >
+                                  Cancel
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => handleDeleteVideo(v.id, e)}
+                                className="text-neutral-500 hover:text-red-400 p-1 rounded transition"
+                                title="Delete from disk"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <p className="mt-1 text-[11px] font-mono text-neutral-400">
                           {Math.floor(v.duration / 60)}m {Math.round(v.duration % 60)}s • {v.width}x{v.height}
@@ -751,12 +819,50 @@ export default function App() {
         />
       )}
 
+      {/* Non-Blocking New Session Confirmation Modal */}
+      {pendingNewSessionConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-neutral-800 bg-neutral-900 p-5 shadow-2xl space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="rounded-xl bg-amber-500/15 p-2 text-amber-400 border border-amber-500/30">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Start New Session?</h3>
+                <p className="text-xs text-neutral-400 mt-1">
+                  Current active unsaved clip selections will be cleared. Saved videos and rendered MP4 files remain safely on disk.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingNewSessionConfirm(false)}
+                className="rounded-xl border border-neutral-700 bg-neutral-800 px-3.5 py-2 text-xs font-semibold text-neutral-200 hover:bg-neutral-700 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmStartNewSession}
+                className="rounded-xl bg-violet-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-violet-500 transition"
+              >
+                Start Fresh
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modals */}
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         isAuthenticated={isAuthenticated}
-        onAuthChange={setIsAuthenticated}
+        onAuthChange={(auth) => {
+          setIsAuthenticated(auth);
+          fetchInitialData();
+        }}
       />
 
       <SettingsModal

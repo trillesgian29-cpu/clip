@@ -1,20 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Download,
-  Play,
   Film,
   Loader2,
   CheckCircle2,
   AlertCircle,
-  ExternalLink,
   Layers,
-  Sparkles,
   Trash2,
   RotateCw,
   HardDrive,
-  Info,
 } from 'lucide-react';
 import { RenderJob, JobQueueCounts } from '../types/index.ts';
+import { api } from '../services/api.ts';
 
 interface RenderQueueProps {
   jobs: RenderJob[];
@@ -23,12 +20,23 @@ interface RenderQueueProps {
   onRetryJob?: (jobId: string) => void;
 }
 
+interface DownloadTransferState {
+  status: 'idle' | 'downloading' | 'saved' | 'error';
+  percent: number;
+  receivedBytes: number;
+  totalBytes?: number;
+  filename?: string;
+  error?: string;
+}
+
 export const RenderQueue: React.FC<RenderQueueProps> = ({
   jobs,
   selectedCount = 0,
   onClearJob,
   onRetryJob,
 }) => {
+  const [downloadStates, setDownloadStates] = useState<Record<string, DownloadTransferState>>({});
+
   const counts: JobQueueCounts = {
     selected: selectedCount,
     queued: jobs.filter((j) => j.status === 'queued').length,
@@ -41,6 +49,53 @@ export const RenderQueue: React.FC<RenderQueueProps> = ({
     if (!bytes) return '';
     const mb = bytes / (1024 * 1024);
     return `${mb.toFixed(1)} MB`;
+  };
+
+  const handleDownloadClip = async (job: RenderJob) => {
+    setDownloadStates((prev) => ({
+      ...prev,
+      [job.id]: {
+        status: 'downloading',
+        percent: 0,
+        receivedBytes: 0,
+        totalBytes: job.fileSize,
+      },
+    }));
+
+    try {
+      const result = await api.downloadRenderedClip(job, ({ receivedBytes, totalBytes, percent }) => {
+        setDownloadStates((prev) => ({
+          ...prev,
+          [job.id]: {
+            status: 'downloading',
+            percent,
+            receivedBytes,
+            totalBytes,
+          },
+        }));
+      });
+
+      setDownloadStates((prev) => ({
+        ...prev,
+        [job.id]: {
+          status: 'saved',
+          percent: 100,
+          receivedBytes: result.bytes,
+          totalBytes: result.bytes,
+          filename: result.filename,
+        },
+      }));
+    } catch (err) {
+      setDownloadStates((prev) => ({
+        ...prev,
+        [job.id]: {
+          status: 'error',
+          percent: 0,
+          receivedBytes: 0,
+          error: (err as Error).message || 'Download failed',
+        },
+      }));
+    }
   };
 
   return (
@@ -95,7 +150,7 @@ export const RenderQueue: React.FC<RenderQueueProps> = ({
       <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-neutral-950/80 border border-neutral-800 text-xs text-neutral-400">
         <HardDrive className="h-4 w-4 text-emerald-400 flex-shrink-0" />
         <span>
-          <strong className="text-neutral-200">Download Persistence:</strong> Downloaded MP4s are saved directly to your local file system. Deleting a server render job frees server scratch space and will never invalidate your downloaded files.
+          <strong className="text-neutral-200">Permanent Local Downloads:</strong> Downloads verify full MP4 byte transfer before saving to your device folder. Once saved, the local MP4 remains playable even after deleting the server render or closing the app.
         </span>
       </div>
 
@@ -104,7 +159,7 @@ export const RenderQueue: React.FC<RenderQueueProps> = ({
           <Film className="mx-auto h-10 w-10 text-neutral-600 mb-3" />
           <h4 className="text-sm font-semibold text-neutral-300">No Render Jobs in Queue</h4>
           <p className="mt-1 text-xs text-neutral-500 max-w-sm mx-auto">
-            Select any clips from the "AI Viral Clips" tab and click "Batch Render Selected" or "Render MP4" to trigger native FFmpeg video generation.
+            Select any clips from the "AI Curated Clips" tab and click "Render Selected" or "Render" to trigger native FFmpeg video generation.
           </p>
         </div>
       ) : (
@@ -113,6 +168,10 @@ export const RenderQueue: React.FC<RenderQueueProps> = ({
             const isRendering = job.status === 'rendering' || job.status === 'queued';
             const isCompleted = job.status === 'completed';
             const isFailed = job.status === 'failed';
+            const dlState = downloadStates[job.id];
+            const isDownloading = dlState?.status === 'downloading';
+            const isSaved = dlState?.status === 'saved';
+            const hasDownloadError = dlState?.status === 'error';
 
             return (
               <div
@@ -203,6 +262,39 @@ export const RenderQueue: React.FC<RenderQueueProps> = ({
                       />
                     </div>
                   )}
+
+                  {/* Local Download Transfer Feedback */}
+                  {isDownloading && (
+                    <div className="mt-3 space-y-1 rounded-lg border border-emerald-500/30 bg-emerald-950/20 p-2.5">
+                      <div className="flex justify-between text-[11px] text-emerald-200">
+                        <span>Saving MP4 to your computer...</span>
+                        <span className="font-mono">{dlState.percent}%</span>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-neutral-800 overflow-hidden">
+                        <div
+                          className="h-full bg-emerald-500 transition-all duration-150"
+                          style={{ width: `${Math.max(4, dlState.percent)}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {isSaved && (
+                    <div className="mt-3 flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-950/20 px-3 py-2 text-[11px] text-emerald-300">
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                      <span className="truncate">
+                        Saved locally ({formatFileSize(dlState.receivedBytes) || formatFileSize(job.fileSize)}):{' '}
+                        <span className="font-mono text-white">{dlState.filename}</span>
+                      </span>
+                    </div>
+                  )}
+
+                  {hasDownloadError && dlState.error && (
+                    <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-950/30 px-3 py-2 text-[11px] text-red-300">
+                      <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-red-400" />
+                      <span>{dlState.error}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Actions Footer */}
@@ -223,21 +315,39 @@ export const RenderQueue: React.FC<RenderQueueProps> = ({
                     )}
 
                     {isCompleted && job.downloadUrl && (
-                      <a
-                        href={job.downloadUrl}
-                        download={job.outputFilename || 'clip.mp4'}
-                        className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-emerald-600/20 hover:from-emerald-500 hover:to-teal-500 transition"
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadClip(job)}
+                        disabled={isDownloading}
+                        className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-emerald-600/20 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-60 transition"
                       >
-                        <Download className="h-4 w-4" />
-                        <span>Download MP4</span>
-                      </a>
+                        {isDownloading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span>Downloading {dlState.percent}%</span>
+                          </>
+                        ) : (
+                          <>
+                            <Download className="h-4 w-4" />
+                            <span>
+                              {isSaved ? 'Download Again' : hasDownloadError ? 'Retry Download' : 'Download MP4'}
+                            </span>
+                          </>
+                        )}
+                      </button>
                     )}
 
                     {onClearJob && (
                       <button
+                        type="button"
                         onClick={() => onClearJob(job.id)}
-                        className="rounded-lg p-2 text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800 transition"
-                        title="Remove from server list"
+                        disabled={isDownloading}
+                        className="rounded-lg p-2 text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800 disabled:opacity-35 disabled:cursor-not-allowed transition"
+                        title={
+                          isDownloading
+                            ? 'Wait for active download transfer to finish before deleting'
+                            : 'Remove server copy (downloaded local MP4 stays unaffected)'
+                        }
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>

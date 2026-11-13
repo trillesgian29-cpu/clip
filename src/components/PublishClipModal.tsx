@@ -52,6 +52,20 @@ export const PublishClipModal: React.FC<PublishClipModalProps> = ({
   const [isPublishing, setIsPublishing] = useState(false);
   const [copiedBundle, setCopiedBundle] = useState(false);
   const [publishedResult, setPublishedResult] = useState<PublishedClip | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [isDownloadingClip, setIsDownloadingClip] = useState(false);
+
+  const handleVerifiedDownload = async () => {
+    if (!renderJob) return;
+    setIsDownloadingClip(true);
+    try {
+      await api.downloadRenderedClip(renderJob);
+    } catch (err) {
+      setPublishError((err as Error).message || 'Failed to download MP4');
+    } finally {
+      setIsDownloadingClip(false);
+    }
+  };
 
   const handleCopyBundle = () => {
     const bundleText = `🎬 TITLE:
@@ -89,6 +103,7 @@ ${clip.startTime.toFixed(1)}s - ${clip.endTime.toFixed(1)}s (${clip.duration.toF
 
   const handlePublish = async () => {
     setIsPublishing(true);
+    setPublishError(null);
     try {
       const result = await api.publishClip({
         clipId: clip.id,
@@ -106,7 +121,7 @@ ${clip.startTime.toFixed(1)}s - ${clip.endTime.toFixed(1)}s (${clip.duration.toF
       setPublishedResult(result.publishedClip);
       onPublishedSuccess(result.publishedClip);
     } catch (err) {
-      alert(`Publishing failed: ${(err as Error).message}`);
+      setPublishError((err as Error).message || 'Publishing failed');
     } finally {
       setIsPublishing(false);
     }
@@ -169,14 +184,15 @@ ${clip.startTime.toFixed(1)}s - ${clip.endTime.toFixed(1)}s (${clip.duration.toF
                 </div>
                 {renderJob?.downloadUrl && (
                   <div className="pt-2 flex justify-end">
-                    <a
-                      href={renderJob.downloadUrl}
-                      download
-                      className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500 transition"
+                    <button
+                      type="button"
+                      onClick={handleVerifiedDownload}
+                      disabled={isDownloadingClip}
+                      className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-60 transition"
                     >
-                      <Download className="h-3.5 w-3.5" />
-                      <span>Download Rendered MP4</span>
-                    </a>
+                      {isDownloadingClip ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                      <span>{isDownloadingClip ? 'Downloading...' : 'Download Rendered MP4'}</span>
+                    </button>
                   </div>
                 )}
               </div>
@@ -249,14 +265,15 @@ ${clip.startTime.toFixed(1)}s - ${clip.endTime.toFixed(1)}s (${clip.duration.toF
                 </div>
 
                 {renderJob?.status === 'completed' ? (
-                  <a
-                    href={renderJob.downloadUrl}
-                    download
-                    className="flex items-center gap-1 rounded bg-neutral-800 px-2.5 py-1 text-[11px] font-semibold text-neutral-200 hover:bg-neutral-700"
+                  <button
+                    type="button"
+                    onClick={handleVerifiedDownload}
+                    disabled={isDownloadingClip}
+                    className="flex items-center gap-1 rounded bg-neutral-800 px-2.5 py-1 text-[11px] font-semibold text-neutral-200 hover:bg-neutral-700 disabled:opacity-60"
                   >
-                    <Download className="h-3 w-3" />
-                    <span>Download</span>
-                  </a>
+                    {isDownloadingClip ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+                    <span>{isDownloadingClip ? 'Saving...' : 'Download'}</span>
+                  </button>
                 ) : onRequestRender ? (
                   <button
                     type="button"
@@ -368,6 +385,11 @@ ${clip.startTime.toFixed(1)}s - ${clip.endTime.toFixed(1)}s (${clip.duration.toF
                   className="rounded-xl border border-neutral-700 bg-neutral-950 px-3 py-2 text-xs text-white focus:border-violet-500 focus:outline-none"
                 />
               </div>
+              {publishError && (
+                <div className="rounded-xl border border-red-500/30 bg-red-950/30 p-3 text-xs text-red-300">
+                  Publishing failed: {publishError}
+                </div>
+              )}
             </div>
           )}
         </div>

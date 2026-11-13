@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
@@ -22,12 +23,14 @@ import {
   revokeSessionToken,
   getOwnerStatus,
   updatePasscode,
+  requireOwnerAuth,
 } from './server/auth.ts';
 import {
   getSupabaseStatus,
   saveProject,
   getProjects,
   saveRenderJobRecord,
+  getRenderJobs,
   savePublishedClip,
   getPublishedClips,
   deletePublishedClip,
@@ -108,7 +111,7 @@ const upload = multer({
 // In-memory registries + active downloads tracker
 const videosRegistry = new Map<string, VideoMetadata>();
 const renderJobsRegistry = new Map<string, RenderJob>();
-const activeDownloads = new Set<string>();
+const activeDownloadCounts = new Map<string, number>();
 
 // Auto-recovery & persistence initialization
 async function initRegistries() {
@@ -164,6 +167,32 @@ async function initRegistries() {
         }
       }
     }
+    // Rehydrate persisted render jobs across server restarts
+    const savedJobs = await getRenderJobs();
+    for (const rawJob of savedJobs) {
+      const outputFilename = rawJob.outputFilename || `clip-${rawJob.id}-${(rawJob.aspectRatio || '9:16').replace(':', 'x')}.mp4`;
+      const resolvedOutputPath = rawJob.outputPath && path.isAbsolute(rawJob.outputPath)
+        ? rawJob.outputPath
+        : path.join(RENDERED_DIR, outputFilename);
+
+      const job: RenderJob = {
+        ...rawJob,
+        outputFilename,
+        outputPath: resolvedOutputPath,
+        downloadUrl: rawJob.downloadUrl || `/api/clips/download/${rawJob.id}`,
+      };
+
+      if (job.status === 'queued' || job.status === 'rendering') {
+        job.status = 'failed';
+        job.error = 'Server restarted before render completed';
+        await saveRenderJobRecord(job);
+      } else if (job.status === 'completed' && !fs.existsSync(resolvedOutputPath)) {
+        job.status = 'failed';
+        job.error = 'Rendered MP4 file missing on disk after restart';
+      }
+
+      renderJobsRegistry.set(job.id, job);
+    }
   } catch (err) {
     console.warn('[ClipGenius Storage] Registry initialization warning:', err);
   }
@@ -171,18 +200,46 @@ async function initRegistries() {
 
 initRegistries();
 
+// Safety helpers for route ID validation and path traversal prevention
+const SAFE_ID_REGEX = /^[a-zA-Z0-9_-]{1,128}$/;
+function isSafeId(val: string | undefined): val is string {
+  return Boolean(val && SAFE_ID_REGEX.test(val));
+}
+
+function isPathInsideDir(baseDir: string, targetPath: string): boolean {
+  const rel = path.relative(path.resolve(baseDir), path.resolve(targetPath));
+  return Boolean(rel && !rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
 // Middleware
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
+app.use((req, _res, next) => {
+  const cookieHeader = req.headers.cookie;
+  const parsed: Record<string, string> = {};
+  if (cookieHeader) {
+    for (const pair of cookieHeader.split(';')) {
+      const idx = pair.indexOf('=');
+      if (idx > 0) {
+        const k = pair.slice(0, idx).trim();
+        const v = decodeURIComponent(pair.slice(idx + 1).trim());
+        parsed[k] = v;
+      }
+    }
+  }
+  (req as any).cookies = parsed;
+  next();
+});
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Helper to get auth token
+// Helper to get auth token from Bearer header or session cookie
 function getBearerToken(req: Request): string | undefined {
   const auth = req.headers.authorization;
   if (auth && auth.startsWith('Bearer ')) {
     return auth.substring(7);
   }
-  return undefined;
+  const cookieToken = (req as any).cookies?.session_token;
+  return typeof cookieToken === 'string' && cookieToken.length > 0 ? cookieToken : undefined;
 }
 
 // -------------------------------------------------------------
@@ -196,6 +253,15 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
 
   if (verifyPasscode(passcode)) {
     const token = createSessionToken();
+    const isHttps =
+      req.secure || String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
+    res.cookie('session_token', token, {
+      httpOnly: true,
+      sameSite: isHttps ? 'none' : 'lax',
+      secure: isHttps,
+      path: '/',
+      maxAge: 24 * 60 * 60 * 1000,
+    });
     return res.json({
       success: true,
       token,
@@ -211,21 +277,22 @@ app.post('/api/auth/logout', (req: Request, res: Response) => {
   if (token) {
     revokeSessionToken(token);
   }
+  const isHttps =
+    req.secure || String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
+  res.clearCookie('session_token', {
+    path: '/',
+    httpOnly: true,
+    sameSite: isHttps ? 'none' : 'lax',
+    secure: isHttps,
+  });
   return res.json({ success: true, message: 'Logged out' });
 });
 
 app.get('/api/auth/check', (req: Request, res: Response) => {
-  const token = getBearerToken(req);
-  const isValid = verifySessionToken(token);
-  return res.json({ authenticated: isValid });
+  return res.json({ authenticated: getOwnerStatus(req) });
 });
 
-app.post('/api/auth/passcode', (req: Request, res: Response) => {
-  const token = getBearerToken(req);
-  if (!verifySessionToken(token)) {
-    return res.status(401).json({ error: 'Owner authentication required' });
-  }
-
+app.post('/api/auth/passcode', requireOwnerAuth, (req: Request, res: Response) => {
   const { oldPasscode, newPasscode } = req.body;
   if (!newPasscode || newPasscode.length < 6) {
     return res.status(400).json({ error: 'New passcode must be at least 6 characters' });
@@ -243,7 +310,6 @@ app.post('/api/auth/passcode', (req: Request, res: Response) => {
 // -------------------------------------------------------------
 app.get('/api/system/status', async (req: Request, res: Response) => {
   const ffmpegStatus = await checkFfmpegAvailability();
-  const token = getBearerToken(req);
   const supabase = getSupabaseStatus();
 
   const openRouterConfigured = isOpenRouterConfigured();
@@ -262,7 +328,7 @@ app.get('/api/system/status', async (req: Request, res: Response) => {
     activeAiProvider,
     supabaseConnected: supabase.isConfigured,
     supabaseUrl: supabase.url,
-    authenticated: verifySessionToken(token),
+    authenticated: getOwnerStatus(req),
     activeUploadsCount: videosRegistry.size,
   });
 });
@@ -298,7 +364,7 @@ app.get('/api/database/status', (_req: Request, res: Response) => {
 // -------------------------------------------------------------
 
 // Initialize a new resumable upload session
-app.post('/api/upload/init', async (req: Request, res: Response) => {
+app.post('/api/upload/init', requireOwnerAuth, async (req: Request, res: Response) => {
   try {
     const { filename, totalSize, chunkSize, mimeType } = req.body;
 
@@ -324,7 +390,7 @@ app.post('/api/upload/init', async (req: Request, res: Response) => {
 });
 
 // Receive a chunk stream directly into disk without buffering in RAM
-app.post('/api/upload/chunk', async (req: Request, res: Response) => {
+app.post('/api/upload/chunk', requireOwnerAuth, async (req: Request, res: Response) => {
   try {
     const uploadId = req.headers['x-upload-id'] as string;
     const chunkIndexStr = req.headers['x-chunk-index'] as string;
@@ -355,8 +421,11 @@ app.post('/api/upload/chunk', async (req: Request, res: Response) => {
 });
 
 // Query upload status to resume interrupted upload
-app.get('/api/upload/status/:uploadId', (req: Request, res: Response) => {
+app.get('/api/upload/status/:uploadId', requireOwnerAuth, (req: Request, res: Response) => {
   const { uploadId } = req.params;
+  if (!isSafeId(uploadId)) {
+    return res.status(400).json({ error: 'Invalid uploadId' });
+  }
   const session = getUploadSession(uploadId);
 
   if (!session) {
@@ -376,7 +445,7 @@ app.get('/api/upload/status/:uploadId', (req: Request, res: Response) => {
 });
 
 // Assemble all chunks into final video file and probe with FFprobe
-app.post('/api/upload/complete', async (req: Request, res: Response) => {
+app.post('/api/upload/complete', requireOwnerAuth, async (req: Request, res: Response) => {
   try {
     const { uploadId } = req.body;
     if (!uploadId) {
@@ -436,9 +505,12 @@ app.post('/api/upload/complete', async (req: Request, res: Response) => {
 });
 
 // Cancel and remove partially uploaded chunks
-app.delete('/api/upload/cancel/:uploadId', async (req: Request, res: Response) => {
+app.delete('/api/upload/cancel/:uploadId', requireOwnerAuth, async (req: Request, res: Response) => {
   try {
     const { uploadId } = req.params;
+    if (!isSafeId(uploadId)) {
+      return res.status(400).json({ error: 'Invalid uploadId' });
+    }
     await cancelUpload(uploadId);
     return res.json({ success: true, message: 'Upload cancelled and chunks cleared' });
   } catch (error) {
@@ -449,7 +521,7 @@ app.delete('/api/upload/cancel/:uploadId', async (req: Request, res: Response) =
 // -------------------------------------------------------------
 // API: VIDEO UPLOAD & SOURCE MANAGEMENT
 // -------------------------------------------------------------
-app.post('/api/videos/upload', upload.single('video'), async (req: Request, res: Response) => {
+app.post('/api/videos/upload', requireOwnerAuth, upload.single('video'), async (req: Request, res: Response) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No video file provided' });
@@ -503,7 +575,7 @@ app.post('/api/videos/upload', upload.single('video'), async (req: Request, res:
 });
 
 // Generate or load real demonstration sample videos
-app.post('/api/videos/sample', async (req: Request, res: Response) => {
+app.post('/api/videos/sample', requireOwnerAuth, async (req: Request, res: Response) => {
   try {
     const { sampleType = 'podcast' } = req.body;
     const normType = sampleType === 'glitch' ? 'technical_glitch' : sampleType;
@@ -656,7 +728,7 @@ app.post('/api/videos/sample', async (req: Request, res: Response) => {
 });
 
 // List all registered videos (persisted across restarts)
-app.get('/api/videos', (_req: Request, res: Response) => {
+app.get('/api/videos', requireOwnerAuth, (_req: Request, res: Response) => {
   return res.json({
     success: true,
     videos: Array.from(videosRegistry.values()),
@@ -664,8 +736,11 @@ app.get('/api/videos', (_req: Request, res: Response) => {
 });
 
 // Get single video metadata
-app.get('/api/videos/item/:id', async (req: Request, res: Response) => {
+app.get('/api/videos/item/:id', requireOwnerAuth, async (req: Request, res: Response) => {
   const { id } = req.params;
+  if (!isSafeId(id)) {
+    return res.status(400).json({ error: 'Invalid video ID' });
+  }
   let video = videosRegistry.get(id);
   if (!video) {
     const saved = await getVideo(id);
@@ -683,12 +758,18 @@ app.get('/api/videos/item/:id', async (req: Request, res: Response) => {
 });
 
 // Delete a source video
-app.delete('/api/videos/:id', async (req: Request, res: Response) => {
+app.delete('/api/videos/:id', requireOwnerAuth, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    if (!isSafeId(id)) {
+      return res.status(400).json({ error: 'Invalid video ID' });
+    }
     const video = videosRegistry.get(id);
+    if (!video) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
 
-    if (video?.filepath && fs.existsSync(video.filepath)) {
+    if (video.filepath && fs.existsSync(video.filepath) && (isPathInsideDir(UPLOADS_DIR, video.filepath) || isPathInsideDir(SAMPLES_DIR, video.filepath))) {
       try {
         fs.unlinkSync(video.filepath);
       } catch (err) {
@@ -706,8 +787,11 @@ app.delete('/api/videos/:id', async (req: Request, res: Response) => {
 });
 
 // Stream video HEAD request for fast player metadata probing
-app.head('/api/videos/stream/:id', async (req: Request, res: Response) => {
+app.head('/api/videos/stream/:id', requireOwnerAuth, async (req: Request, res: Response) => {
   const { id } = req.params;
+  if (!isSafeId(id)) {
+    return res.status(400).end();
+  }
   let video = videosRegistry.get(id);
   let filepath = video?.filepath;
 
@@ -741,8 +825,11 @@ app.head('/api/videos/stream/:id', async (req: Request, res: Response) => {
 });
 
 // Stream video with robust HTTP 206 partial content and HTTP 416 range validation
-app.get('/api/videos/stream/:id', async (req: Request, res: Response) => {
+app.get('/api/videos/stream/:id', requireOwnerAuth, async (req: Request, res: Response) => {
   const { id } = req.params;
+  if (!isSafeId(id)) {
+    return res.status(400).json({ error: 'Invalid video ID' });
+  }
   let video = videosRegistry.get(id);
   let filepath = video?.filepath;
 
@@ -777,7 +864,7 @@ app.get('/api/videos/stream/:id', async (req: Request, res: Response) => {
     const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
 
     // HTTP 416 Range Not Satisfiable check
-    if (isNaN(start) || start >= fileSize || (parts[1] && (end >= fileSize || start > end))) {
+    if (isNaN(start) || start < 0 || start >= fileSize || (parts[1] && (isNaN(end) || end >= fileSize || start > end))) {
       res.status(416).setHeader('Content-Range', `bytes */${fileSize}`).end();
       return;
     }
@@ -791,6 +878,10 @@ app.get('/api/videos/stream/:id', async (req: Request, res: Response) => {
       'Content-Type': 'video/mp4',
     };
     res.writeHead(206, head);
+    file.on('error', () => {
+      if (!res.headersSent) res.status(500).end();
+      else res.end();
+    });
     file.pipe(res);
   } else {
     const head = {
@@ -799,18 +890,26 @@ app.get('/api/videos/stream/:id', async (req: Request, res: Response) => {
       'Accept-Ranges': 'bytes',
     };
     res.writeHead(200, head);
-    fs.createReadStream(filepath).pipe(res);
+    const file = fs.createReadStream(filepath);
+    file.on('error', () => {
+      if (!res.headersSent) res.status(500).end();
+      else res.end();
+    });
+    file.pipe(res);
   }
 });
 
 // Serve thumbnail images
-app.get('/api/thumbnails/:id', (req: Request, res: Response) => {
+app.get('/api/thumbnails/:id', requireOwnerAuth, (req: Request, res: Response) => {
   const { id } = req.params;
+  if (!isSafeId(id)) {
+    return res.status(400).send('Invalid thumbnail ID');
+  }
   const thumbPath = path.join(THUMBNAILS_DIR, `thumb-${id}.jpg`);
 
-  if (fs.existsSync(thumbPath)) {
+  if (isPathInsideDir(THUMBNAILS_DIR, thumbPath) && fs.existsSync(thumbPath)) {
     res.setHeader('Content-Type', 'image/jpeg');
-    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('Cache-Control', 'private, max-age=86400');
     return fs.createReadStream(thumbPath).pipe(res);
   }
 
@@ -818,9 +917,12 @@ app.get('/api/thumbnails/:id', (req: Request, res: Response) => {
 });
 
 // Generate and serve instantaneous clip thumbnail at specific timestamp
-app.get('/api/thumbnails/clip/:sourceVideoId', async (req: Request, res: Response) => {
+app.get('/api/thumbnails/clip/:sourceVideoId', requireOwnerAuth, async (req: Request, res: Response) => {
   try {
     const { sourceVideoId } = req.params;
+    if (!isSafeId(sourceVideoId)) {
+      return res.status(400).send('Invalid video ID');
+    }
     const timestampSec = Math.max(0, parseFloat(req.query.t as string) || 0);
 
     const video = videosRegistry.get(sourceVideoId);
@@ -845,7 +947,7 @@ app.get('/api/thumbnails/clip/:sourceVideoId', async (req: Request, res: Respons
     }
 
     res.setHeader('Content-Type', 'image/jpeg');
-    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('Cache-Control', 'private, max-age=86400');
     return fs.createReadStream(thumbPath).pipe(res);
   } catch (err) {
     return res.status(500).send(`Failed to extract clip thumbnail: ${(err as Error).message}`);
@@ -877,7 +979,7 @@ function logAiLifecycle(event: string, requestId: string, details: Record<string
   }
 }
 
-app.post(['/api/ai/analyze', '/api/analyze'], async (req: Request, res: Response) => {
+app.post(['/api/ai/analyze', '/api/analyze'], requireOwnerAuth, async (req: Request, res: Response) => {
   const reqId = `ai-${Date.now()}-${Math.round(Math.random() * 1000)}`;
   const reqStartMs = Date.now();
   let clientAborted = false;
@@ -985,6 +1087,14 @@ app.post(['/api/ai/analyze', '/api/analyze'], async (req: Request, res: Response
       hasInsufficientContent: result.hasInsufficientContent,
       analysisSummary: result.analysisSummary,
       transcriptVerification: result.transcriptVerification,
+      sourceVideoMetadata: result.sourceMetadata || {
+        width: video.width,
+        height: video.height,
+        fps: video.fps,
+        format: video.format,
+        hasAudio: video.hasAudio,
+        bitrate: video.bitrate,
+      },
     };
 
     logAiLifecycle('DISPATCH_SUCCESS', reqId, {
@@ -1022,17 +1132,32 @@ app.post(['/api/ai/analyze', '/api/analyze'], async (req: Request, res: Response
       sourceVideo: video,
     });
   } catch (error) {
-    const errMsg = (error as Error).message;
+    const errObj = error as any;
+    const errMsg = errObj?.message || String(error);
+    const httpStatus =
+      errObj?.statusCode === 429 || errMsg.includes('HTTP 429')
+        ? 429
+        : errObj?.statusCode === 401 || errObj?.statusCode === 403
+        ? errObj.statusCode
+        : 500;
     logAiLifecycle('DISPATCH_ERROR', reqId, {
       error: errMsg,
+      statusCode: httpStatus,
+      isDailyQuotaExhausted: Boolean(errObj?.isDailyQuotaExhausted),
+      rateLimitResetAt: errObj?.rateLimitResetAt,
       elapsedMs: Date.now() - reqStartMs,
     });
-    return res.status(500).json({ error: errMsg, requestId: reqId });
+    return res.status(httpStatus).json({
+      error: errMsg,
+      requestId: reqId,
+      isDailyQuotaExhausted: Boolean(errObj?.isDailyQuotaExhausted),
+      rateLimitResetAt: errObj?.rateLimitResetAt,
+    });
   }
 });
 
 // Endpoint to independently validate clip timestamps and quote before render/publish
-app.post('/api/clips/validate', (req: Request, res: Response) => {
+app.post('/api/clips/validate', requireOwnerAuth, (req: Request, res: Response) => {
   try {
     const { clip, videoDuration, transcript } = req.body;
     if (!clip || typeof videoDuration !== 'number') {
@@ -1049,7 +1174,7 @@ app.post('/api/clips/validate', (req: Request, res: Response) => {
 // -------------------------------------------------------------
 // API: FFMPEG REAL VIDEO RENDERING ENGINE
 // -------------------------------------------------------------
-app.post('/api/clips/render', async (req: Request, res: Response) => {
+app.post('/api/clips/render', requireOwnerAuth, async (req: Request, res: Response) => {
   try {
     const {
       sourceVideoId,
@@ -1065,12 +1190,20 @@ app.post('/api/clips/render', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Source video not found on disk' });
     }
 
+    const rawStart = parseFloat(startTime);
+    const rawEnd = parseFloat(endTime);
+    if (isNaN(rawStart) || isNaN(rawEnd) || rawStart < 0 || rawEnd <= rawStart || rawStart >= video.duration) {
+      return res.status(400).json({
+        error: `Invalid clip timestamp range [${startTime}s - ${endTime}s] for source video duration ${video.duration}s`,
+      });
+    }
+
     const jobId = `job-${Date.now()}-${Math.round(Math.random() * 1000)}`;
     const outputFilename = `clip-${jobId}-${aspectRatio.replace(':', 'x')}.mp4`;
     const outputPath = path.join(RENDERED_DIR, outputFilename);
 
-    const safeStart = Math.max(0, parseFloat(startTime) || 0);
-    const safeEnd = Math.min(video.duration, parseFloat(endTime) || safeStart + 30);
+    const safeStart = Math.max(0, rawStart);
+    const safeEnd = Math.min(video.duration, rawEnd);
     const targetDuration = Math.max(0.5, safeEnd - safeStart);
 
     const renderJob: RenderJob = {
@@ -1081,7 +1214,7 @@ app.post('/api/clips/render', async (req: Request, res: Response) => {
       startTime: safeStart,
       endTime: safeEnd,
       aspectRatio: (aspectRatio as '9:16' | '1:1' | '16:9') || '9:16',
-      status: 'rendering',
+      status: 'queued',
       progress: 0,
       outputFilename,
       outputPath,
@@ -1091,6 +1224,7 @@ app.post('/api/clips/render', async (req: Request, res: Response) => {
     };
 
     renderJobsRegistry.set(jobId, renderJob);
+    await saveRenderJobRecord(renderJob);
 
     // Enqueue render task with concurrency & resource protection
     enqueueJob({
@@ -1136,6 +1270,7 @@ app.post('/api/clips/render', async (req: Request, res: Response) => {
           if (job) {
             job.status = 'failed';
             job.error = (err as Error).message;
+            await saveRenderJobRecord(job);
           }
           throw err;
         }
@@ -1152,8 +1287,8 @@ app.post('/api/clips/render', async (req: Request, res: Response) => {
   }
 });
 
-// Atomic batch rendering for multiple clips
-app.post('/api/clips/batch-render', async (req: Request, res: Response) => {
+// Atomic batch rendering for multiple clips (never silently skips invalid/missing clips)
+app.post('/api/clips/batch-render', requireOwnerAuth, async (req: Request, res: Response) => {
   try {
     const { clips, defaultAspectRatio = '9:16' } = req.body;
     if (!Array.isArray(clips) || clips.length === 0) {
@@ -1162,20 +1297,69 @@ app.post('/api/clips/batch-render', async (req: Request, res: Response) => {
 
     const jobs: RenderJob[] = [];
 
-    for (const clip of clips) {
+    for (let idx = 0; idx < clips.length; idx++) {
+      const clip = clips[idx];
       const sourceVideoId = clip.sourceVideoId;
       const video = videosRegistry.get(sourceVideoId);
-      if (!video || !fs.existsSync(video.filepath)) {
-        continue;
-      }
-
-      const jobId = `job-${Date.now()}-${Math.round(Math.random() * 10000)}`;
+      const jobId = `job-${Date.now()}-${idx}-${Math.round(Math.random() * 10000)}`;
       const clipAspect = (clip.aspectRatio || defaultAspectRatio || '9:16') as '9:16' | '1:1' | '16:9';
       const outputFilename = `clip-${jobId}-${clipAspect.replace(':', 'x')}.mp4`;
       const outputPath = path.join(RENDERED_DIR, outputFilename);
 
-      const safeStart = Math.max(0, parseFloat(clip.startTime) || 0);
-      const safeEnd = Math.min(video.duration, parseFloat(clip.endTime) || safeStart + 30);
+      const rawStart = parseFloat(clip.startTime);
+      const rawEnd = parseFloat(clip.endTime);
+
+      // Expose explicit failed job instead of silently skipping broken/missing clips
+      if (!video || !fs.existsSync(video.filepath)) {
+        const failedJob: RenderJob = {
+          id: jobId,
+          clipId: clip.clipId || clip.id || jobId,
+          title: clip.title || `Viral Clip (${clipAspect})`,
+          sourceVideoId: sourceVideoId || 'unknown',
+          startTime: isNaN(rawStart) ? 0 : rawStart,
+          endTime: isNaN(rawEnd) ? 0 : rawEnd,
+          aspectRatio: clipAspect,
+          status: 'failed',
+          progress: 0,
+          outputFilename,
+          outputPath,
+          downloadUrl: `/api/clips/download/${jobId}`,
+          duration: 0,
+          error: `Source video "${sourceVideoId}" not found on disk`,
+          createdAt: new Date().toISOString(),
+        };
+        renderJobsRegistry.set(jobId, failedJob);
+        await saveRenderJobRecord(failedJob);
+        jobs.push(failedJob);
+        continue;
+      }
+
+      if (isNaN(rawStart) || isNaN(rawEnd) || rawStart < 0 || rawEnd <= rawStart || rawStart >= video.duration) {
+        const failedJob: RenderJob = {
+          id: jobId,
+          clipId: clip.clipId || clip.id || jobId,
+          title: clip.title || `Viral Clip (${clipAspect})`,
+          sourceVideoId,
+          startTime: isNaN(rawStart) ? 0 : rawStart,
+          endTime: isNaN(rawEnd) ? 0 : rawEnd,
+          aspectRatio: clipAspect,
+          status: 'failed',
+          progress: 0,
+          outputFilename,
+          outputPath,
+          downloadUrl: `/api/clips/download/${jobId}`,
+          duration: 0,
+          error: `Invalid timestamp bounds [${clip.startTime}s - ${clip.endTime}s] for source duration ${video.duration}s`,
+          createdAt: new Date().toISOString(),
+        };
+        renderJobsRegistry.set(jobId, failedJob);
+        await saveRenderJobRecord(failedJob);
+        jobs.push(failedJob);
+        continue;
+      }
+
+      const safeStart = Math.max(0, rawStart);
+      const safeEnd = Math.min(video.duration, rawEnd);
       const targetDuration = Math.max(0.5, safeEnd - safeStart);
 
       const renderJob: RenderJob = {
@@ -1196,6 +1380,7 @@ app.post('/api/clips/batch-render', async (req: Request, res: Response) => {
       };
 
       renderJobsRegistry.set(jobId, renderJob);
+      await saveRenderJobRecord(renderJob);
       jobs.push(renderJob);
 
       enqueueJob({
@@ -1239,6 +1424,7 @@ app.post('/api/clips/batch-render', async (req: Request, res: Response) => {
             if (j) {
               j.status = 'failed';
               j.error = (err as Error).message;
+              await saveRenderJobRecord(j);
             }
             throw err;
           }
@@ -1257,10 +1443,21 @@ app.post('/api/clips/batch-render', async (req: Request, res: Response) => {
   }
 });
 
+// List all persisted and active render jobs
+app.get('/api/clips/jobs', requireOwnerAuth, (_req: Request, res: Response) => {
+  const jobs = Array.from(renderJobsRegistry.values()).sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+  return res.json({ success: true, jobs });
+});
+
 // Retry a failed render job
-app.post('/api/clips/retry/:jobId', async (req: Request, res: Response) => {
+app.post('/api/clips/retry/:jobId', requireOwnerAuth, async (req: Request, res: Response) => {
   try {
     const { jobId } = req.params;
+    if (!isSafeId(jobId)) {
+      return res.status(400).json({ error: 'Invalid jobId' });
+    }
     const job = renderJobsRegistry.get(jobId);
     if (!job) {
       return res.status(404).json({ error: 'Render job not found' });
@@ -1274,6 +1471,7 @@ app.post('/api/clips/retry/:jobId', async (req: Request, res: Response) => {
     job.status = 'queued';
     job.progress = 0;
     job.error = undefined;
+    await saveRenderJobRecord(job);
 
     enqueueJob({
       id: jobId,
@@ -1305,6 +1503,7 @@ app.post('/api/clips/retry/:jobId', async (req: Request, res: Response) => {
         } catch (err) {
           job.status = 'failed';
           job.error = (err as Error).message;
+          await saveRenderJobRecord(job);
           throw err;
         }
       },
@@ -1317,9 +1516,12 @@ app.post('/api/clips/retry/:jobId', async (req: Request, res: Response) => {
 });
 
 // Video Content Quality Inspector report
-app.get('/api/quality/inspect/:videoId', async (req: Request, res: Response) => {
+app.get('/api/quality/inspect/:videoId', requireOwnerAuth, async (req: Request, res: Response) => {
   try {
     const { videoId } = req.params;
+    if (!isSafeId(videoId)) {
+      return res.status(400).json({ error: 'Invalid videoId' });
+    }
     const video = videosRegistry.get(videoId);
     if (!video || !fs.existsSync(video.filepath)) {
       return res.status(404).json({ error: 'Video not found on disk' });
@@ -1333,8 +1535,11 @@ app.get('/api/quality/inspect/:videoId', async (req: Request, res: Response) => 
 });
 
 // Check status of a render job
-app.get('/api/clips/status/:jobId', (req: Request, res: Response) => {
+app.get('/api/clips/status/:jobId', requireOwnerAuth, (req: Request, res: Response) => {
   const { jobId } = req.params;
+  if (!isSafeId(jobId)) {
+    return res.status(400).json({ error: 'Invalid jobId' });
+  }
   const job = renderJobsRegistry.get(jobId);
 
   if (!job) {
@@ -1345,11 +1550,14 @@ app.get('/api/clips/status/:jobId', (req: Request, res: Response) => {
 });
 
 // Download rendered MP4 clip with safe headers, range streaming, and active download tracking
-app.get('/api/clips/download/:jobId', (req: Request, res: Response) => {
+app.get('/api/clips/download/:jobId', requireOwnerAuth, (req: Request, res: Response) => {
   const { jobId } = req.params;
+  if (!isSafeId(jobId)) {
+    return res.status(400).json({ error: 'Invalid jobId' });
+  }
   const job = renderJobsRegistry.get(jobId);
 
-  if (!job || !job.outputPath || !fs.existsSync(job.outputPath)) {
+  if (!job || !job.outputPath || !isPathInsideDir(RENDERED_DIR, job.outputPath) || !fs.existsSync(job.outputPath)) {
     return res.status(404).json({ error: 'Rendered clip not found or still processing' });
   }
 
@@ -1359,9 +1567,18 @@ app.get('/api/clips/download/:jobId', (req: Request, res: Response) => {
   const safeAspect = (job.aspectRatio || '9x16').replace(':', 'x');
   const safeFilename = `${safeTitle}_${safeAspect}.mp4`;
 
-  activeDownloads.add(jobId);
+  const currentCount = activeDownloadCounts.get(jobId) || 0;
+  activeDownloadCounts.set(jobId, currentCount + 1);
+  let cleaned = false;
   const cleanup = () => {
-    activeDownloads.delete(jobId);
+    if (cleaned) return;
+    cleaned = true;
+    const prev = activeDownloadCounts.get(jobId) || 0;
+    if (prev <= 1) {
+      activeDownloadCounts.delete(jobId);
+    } else {
+      activeDownloadCounts.set(jobId, prev - 1);
+    }
   };
   res.on('finish', cleanup);
   res.on('close', cleanup);
@@ -1369,6 +1586,7 @@ app.get('/api/clips/download/:jobId', (req: Request, res: Response) => {
   res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
   res.setHeader('Accept-Ranges', 'bytes');
   res.setHeader('Content-Type', 'video/mp4');
+  res.setHeader('Cache-Control', 'private, no-store');
 
   const range = req.headers.range;
   if (range) {
@@ -1376,7 +1594,7 @@ app.get('/api/clips/download/:jobId', (req: Request, res: Response) => {
     const start = parseInt(parts[0], 10);
     const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
 
-    if (isNaN(start) || start >= fileSize || (parts[1] && (end >= fileSize || start > end))) {
+    if (isNaN(start) || start < 0 || start >= fileSize || (parts[1] && (isNaN(end) || end >= fileSize || start > end))) {
       res.status(416).setHeader('Content-Range', `bytes */${fileSize}`).end();
       return;
     }
@@ -1386,25 +1604,47 @@ app.get('/api/clips/download/:jobId', (req: Request, res: Response) => {
     res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`);
     res.setHeader('Content-Length', chunksize);
     const stream = fs.createReadStream(job.outputPath, { start, end });
+    stream.on('error', () => {
+      cleanup();
+      if (!res.headersSent) res.status(500).end();
+      else res.end();
+    });
+    res.on('close', () => {
+      stream.destroy();
+    });
     stream.pipe(res);
   } else {
     res.setHeader('Content-Length', fileSize);
     const stream = fs.createReadStream(job.outputPath);
+    stream.on('error', () => {
+      cleanup();
+      if (!res.headersSent) res.status(500).end();
+      else res.end();
+    });
+    res.on('close', () => {
+      stream.destroy();
+    });
     stream.pipe(res);
   }
 });
 
 // Delete a rendered clip from server without affecting already downloaded files
-app.delete('/api/clips/render/:jobId', async (req: Request, res: Response) => {
+app.delete('/api/clips/render/:jobId', requireOwnerAuth, async (req: Request, res: Response) => {
   try {
     const { jobId } = req.params;
+    if (!isSafeId(jobId)) {
+      return res.status(400).json({ error: 'Invalid jobId' });
+    }
     const job = renderJobsRegistry.get(jobId);
+    if (!job) {
+      return res.status(404).json({ error: 'Render job not found' });
+    }
 
-    if (activeDownloads.has(jobId)) {
+    if ((activeDownloadCounts.get(jobId) || 0) > 0) {
       return res.status(409).json({ error: 'Cannot delete clip while an active download is in progress' });
     }
 
-    if (job?.outputPath && fs.existsSync(job.outputPath)) {
+    if (job.outputPath && isPathInsideDir(RENDERED_DIR, job.outputPath) && fs.existsSync(job.outputPath)) {
       try {
         fs.unlinkSync(job.outputPath);
       } catch (err) {
@@ -1421,12 +1661,36 @@ app.delete('/api/clips/render/:jobId', async (req: Request, res: Response) => {
   }
 });
 
-// Stream rendered MP4 clip for in-browser playback
-app.get('/api/clips/stream/:jobId', (req: Request, res: Response) => {
+// HEAD request for rendered MP4 stream probing
+app.head('/api/clips/stream/:jobId', requireOwnerAuth, (req: Request, res: Response) => {
   const { jobId } = req.params;
+  if (!isSafeId(jobId)) {
+    return res.status(400).end();
+  }
   const job = renderJobsRegistry.get(jobId);
 
-  if (!job || !job.outputPath || !fs.existsSync(job.outputPath)) {
+  if (!job || !job.outputPath || !isPathInsideDir(RENDERED_DIR, job.outputPath) || !fs.existsSync(job.outputPath)) {
+    return res.status(404).end();
+  }
+
+  const stat = fs.statSync(job.outputPath);
+  res.writeHead(200, {
+    'Content-Length': stat.size,
+    'Content-Type': 'video/mp4',
+    'Accept-Ranges': 'bytes',
+  });
+  res.end();
+});
+
+// Stream rendered MP4 clip for in-browser playback with full HTTP 206 & 416 handling
+app.get('/api/clips/stream/:jobId', requireOwnerAuth, (req: Request, res: Response) => {
+  const { jobId } = req.params;
+  if (!isSafeId(jobId)) {
+    return res.status(400).send('Invalid jobId');
+  }
+  const job = renderJobsRegistry.get(jobId);
+
+  if (!job || !job.outputPath || !isPathInsideDir(RENDERED_DIR, job.outputPath) || !fs.existsSync(job.outputPath)) {
     return res.status(404).send('Rendered clip not found');
   }
 
@@ -1438,6 +1702,12 @@ app.get('/api/clips/stream/:jobId', (req: Request, res: Response) => {
     const parts = range.replace(/bytes=/, '').split('-');
     const start = parseInt(parts[0], 10);
     const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+
+    if (isNaN(start) || start < 0 || start >= fileSize || (parts[1] && (isNaN(end) || end >= fileSize || start > end))) {
+      res.status(416).setHeader('Content-Range', `bytes */${fileSize}`).end();
+      return;
+    }
+
     const chunksize = end - start + 1;
     const file = fs.createReadStream(job.outputPath, { start, end });
     const head = {
@@ -1447,14 +1717,24 @@ app.get('/api/clips/stream/:jobId', (req: Request, res: Response) => {
       'Content-Type': 'video/mp4',
     };
     res.writeHead(206, head);
+    file.on('error', () => {
+      if (!res.headersSent) res.status(500).end();
+      else res.end();
+    });
     file.pipe(res);
   } else {
     const head = {
       'Content-Length': fileSize,
       'Content-Type': 'video/mp4',
+      'Accept-Ranges': 'bytes',
     };
     res.writeHead(200, head);
-    fs.createReadStream(job.outputPath).pipe(res);
+    const file = fs.createReadStream(job.outputPath);
+    file.on('error', () => {
+      if (!res.headersSent) res.status(500).end();
+      else res.end();
+    });
+    file.pipe(res);
   }
 });
 
@@ -1463,7 +1743,7 @@ app.get('/api/clips/stream/:jobId', (req: Request, res: Response) => {
 // -------------------------------------------------------------
 
 // Publish an individual reviewed clip
-app.post('/api/clips/publish', async (req: Request, res: Response) => {
+app.post('/api/clips/publish', requireOwnerAuth, async (req: Request, res: Response) => {
   try {
     const {
       clipId,
@@ -1514,7 +1794,7 @@ app.post('/api/clips/publish', async (req: Request, res: Response) => {
 });
 
 // Retrieve all individually published clips
-app.get('/api/clips/published', async (_req: Request, res: Response) => {
+app.get('/api/clips/published', requireOwnerAuth, async (_req: Request, res: Response) => {
   try {
     const published = await getPublishedClips();
     return res.json({ published });
@@ -1524,9 +1804,12 @@ app.get('/api/clips/published', async (_req: Request, res: Response) => {
 });
 
 // Remove/unpublish a published clip record
-app.delete('/api/clips/publish/:id', async (req: Request, res: Response) => {
+app.delete('/api/clips/publish/:id', requireOwnerAuth, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    if (!isSafeId(id)) {
+      return res.status(400).json({ error: 'Invalid published clip ID' });
+    }
     await deletePublishedClip(id);
     return res.json({ success: true, message: 'Published clip record removed' });
   } catch (error) {
@@ -1537,7 +1820,7 @@ app.delete('/api/clips/publish/:id', async (req: Request, res: Response) => {
 // -------------------------------------------------------------
 // API: PROJECTS STORAGE & SUPABASE SYNC
 // -------------------------------------------------------------
-app.get('/api/projects', async (_req: Request, res: Response) => {
+app.get('/api/projects', requireOwnerAuth, async (_req: Request, res: Response) => {
   try {
     const projects = await getProjects();
     return res.json({ projects });
@@ -1546,7 +1829,7 @@ app.get('/api/projects', async (_req: Request, res: Response) => {
   }
 });
 
-app.post('/api/projects', async (req: Request, res: Response) => {
+app.post('/api/projects', requireOwnerAuth, async (req: Request, res: Response) => {
   try {
     const projectData = req.body as ProjectData;
     if (!projectData || !projectData.id) {
@@ -1590,6 +1873,8 @@ async function startServer() {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
+
+  await initRegistries();
 
   const httpServer = app.listen(PORT, '0.0.0.0', () => {
     console.log(`[ClipGenius AI] Full-Stack server running on port ${PORT}`);

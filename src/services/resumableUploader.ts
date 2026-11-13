@@ -3,9 +3,18 @@ import { ClientUploadProgress, VideoMetadata } from '../types/index.ts';
 const SESSION_STORAGE_KEY = 'clipgenius_active_upload_session';
 
 // Safe native fetch wrapper: invokes native browser fetch without overriding global properties
-async function safeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+async function safeFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
   const fetchFn = typeof window !== 'undefined' && window.fetch ? window.fetch.bind(window) : globalThis.fetch;
-  return fetchFn(input, init);
+  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('clipgenius_owner_token') : null;
+  const headers = new Headers(init.headers);
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  return fetchFn(input, {
+    credentials: 'include',
+    ...init,
+    headers,
+  });
 }
 
 export interface ResumableUploaderOptions {

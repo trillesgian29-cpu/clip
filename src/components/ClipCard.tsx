@@ -17,6 +17,9 @@ import {
   Sliders,
   CheckSquare,
   Square,
+  AlertTriangle,
+  Eye,
+  Volume2,
 } from 'lucide-react';
 import { ClipSuggestion } from '../types/index.ts';
 
@@ -63,6 +66,11 @@ export const ClipCard: React.FC<ClipCardProps> = ({
   // Time editing state
   const [start, setStart] = useState(clip.startTime);
   const [end, setEnd] = useState(clip.endTime);
+
+  useEffect(() => {
+    setStart(clip.startTime);
+    setEnd(clip.endTime);
+  }, [clip.id, clip.startTime, clip.endTime]);
 
   // Video element ref for inline playback
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -363,6 +371,25 @@ export const ClipCard: React.FC<ClipCardProps> = ({
                   Transition-Trimmed
                 </span>
               )}
+              {/* Source Verification Status */}
+              {clip.verificationStatus && (
+                <span
+                  className={`rounded px-2 py-0.5 text-[10px] font-semibold border ${
+                    clip.verificationStatus === 'verified'
+                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                      : clip.verificationStatus === 'uncertain'
+                      ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                      : 'bg-red-500/15 text-red-300 border-red-500/30'
+                  }`}
+                  title={clip.uncertaintyNote || 'Verified against source video metadata, FFmpeg decodability, and timeline checks'}
+                >
+                  {clip.verificationStatus === 'verified'
+                    ? 'Source Verified'
+                    : clip.verificationStatus === 'uncertain'
+                    ? 'Uncertain'
+                    : 'Rejected'}
+                </span>
+              )}
               {/* Review / Publish Lifecycle Status */}
               <span
                 className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
@@ -389,24 +416,51 @@ export const ClipCard: React.FC<ClipCardProps> = ({
               {clip.title}
             </h4>
 
-            {/* Viral Metrics Breakdown Pills */}
-            {clip.scores && (
+            {/* Viral Metrics & Confidence Row */}
+            {(clip.scores || typeof clip.confidence === 'number') && (
               <div className="flex items-center gap-2 mt-2 text-[10px] text-neutral-400 flex-wrap">
-                <span>Hook: <strong className="text-white font-mono">{clip.scores.hook.toFixed(1)}</strong></span>
-                <span className="text-neutral-600">•</span>
-                <span>Flow: <strong className="text-white font-mono">{clip.scores.standalone.toFixed(1)}</strong></span>
-                <span className="text-neutral-600">•</span>
-                <span>Payoff: <strong className="text-white font-mono">{clip.scores.payoff.toFixed(1)}</strong></span>
+                {clip.scores && (
+                  <>
+                    <span>Hook: <strong className="text-white font-mono">{clip.scores.hook.toFixed(1)}</strong></span>
+                    <span className="text-neutral-600">•</span>
+                    <span>Flow: <strong className="text-white font-mono">{clip.scores.standalone.toFixed(1)}</strong></span>
+                    <span className="text-neutral-600">•</span>
+                    <span>Payoff: <strong className="text-white font-mono">{clip.scores.payoff.toFixed(1)}</strong></span>
+                  </>
+                )}
+                {typeof clip.confidence === 'number' && (
+                  <>
+                    {clip.scores && <span className="text-neutral-600">•</span>}
+                    <span>
+                      Conf:{' '}
+                      <strong className={`font-mono ${clip.confidence >= 0.7 ? 'text-emerald-300' : 'text-amber-300'}`}>
+                        {clip.confidence > 0 ? `${Math.round(clip.confidence * 100)}%` : 'Unreported'}
+                      </strong>
+                    </span>
+                  </>
+                )}
               </div>
             )}
           </div>
 
-          {/* Hook quote preview */}
-          <div className="mt-3 rounded-xl border border-neutral-800 bg-neutral-950/70 p-3">
+          {/* Factual Description / Hook */}
+          <div className="mt-3 rounded-xl border border-neutral-800 bg-neutral-950/70 p-3 space-y-1.5">
             <p className="text-xs italic text-neutral-300 line-clamp-2">
               "{clip.hook}"
             </p>
+            {(clip.factualDescription || clip.description) && (
+              <p className="text-[11px] text-neutral-400 line-clamp-2 leading-relaxed">
+                {clip.factualDescription || clip.description}
+              </p>
+            )}
           </div>
+
+          {clip.uncertaintyNote && (
+            <div className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-500/25 bg-amber-950/20 px-2.5 py-1.5 text-[11px] text-amber-200/90">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-400" />
+              <span className="line-clamp-2">{clip.uncertaintyNote}</span>
+            </div>
+          )}
 
           {/* Time boundaries fine-tuner */}
           <div className="mt-3 pt-1">
@@ -545,13 +599,37 @@ export const ClipCard: React.FC<ClipCardProps> = ({
             className="flex items-center gap-1 text-[11px] text-neutral-400 hover:text-neutral-200 transition"
           >
             {showDetails ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-            <span>{showDetails ? 'Hide Virality Insights' : 'View Virality Analysis & Social Copy'}</span>
+            <span>{showDetails ? 'Hide Source Evidence & Insights' : 'View Source Evidence & Social Copy'}</span>
           </button>
 
           {showDetails && (
             <div className="mt-3 space-y-2 rounded-xl bg-neutral-950/80 p-3 text-xs border border-neutral-850">
+              {clip.factualDescription && (
+                <div>
+                  <span className="font-semibold text-neutral-300">What happens: </span>
+                  <span className="text-neutral-400">{clip.factualDescription}</span>
+                </div>
+              )}
+              {clip.visualEvidence && (
+                <div className="flex items-start gap-1.5 text-[11px] text-neutral-400">
+                  <Eye className="h-3.5 w-3.5 text-sky-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-semibold text-neutral-300">Visual Evidence: </span>
+                    <span>{clip.visualEvidence}</span>
+                  </div>
+                </div>
+              )}
+              {(clip.audioEvidence || clip.transcriptSegment) && (
+                <div className="flex items-start gap-1.5 text-[11px] text-neutral-400">
+                  <Volume2 className="h-3.5 w-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-semibold text-neutral-300">Audio / Transcript: </span>
+                    <span>{clip.audioEvidence || clip.transcriptSegment}</span>
+                  </div>
+                </div>
+              )}
               <div>
-                <span className="font-semibold text-neutral-300">Why it works: </span>
+                <span className="font-semibold text-neutral-300">Why selected: </span>
                 <span className="text-neutral-400">{clip.viralityReason}</span>
               </div>
               {clip.boundaryAdjusted && clip.originalStartTime !== undefined && clip.originalEndTime !== undefined && (

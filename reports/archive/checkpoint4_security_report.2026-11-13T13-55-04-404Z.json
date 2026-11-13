@@ -1,0 +1,29 @@
+{
+  "reportVersion": "2.0",
+  "runId": "run-1794578066877-1095",
+  "runStatus": "running",
+  "startedAt": "2026-11-13T13:54:26.866Z",
+  "updatedAt": "2026-11-13T13:54:27.595Z",
+  "completedAt": null,
+  "archivedPreviousReportPath": null,
+  "interruptedReason": null,
+  "metadata": {},
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "incomplete": 0,
+    "skipped": 0
+  },
+  "tests": {
+    "cp_final_security_auth_gates": {
+      "name": "cp_final_security_auth_gates",
+      "status": "failed",
+      "startedAt": "2026-11-13T13:54:26.882Z",
+      "completedAt": "2026-11-13T13:54:27.594Z",
+      "elapsedMs": 712,
+      "error": "ASSERTION FAILED: Owner login failed (401): {\"error\":\"Invalid owner passcode\"}",
+      "telemetry": null
+    }
+  }
+}

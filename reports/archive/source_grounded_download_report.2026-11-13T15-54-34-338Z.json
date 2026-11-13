@@ -1,0 +1,108 @@
+{
+  "reportVersion": "2.0",
+  "runId": "run-1794585182070-9899",
+  "runStatus": "running",
+  "startedAt": "2026-11-13T15:53:02.069Z",
+  "updatedAt": "2026-11-13T15:53:54.443Z",
+  "completedAt": null,
+  "archivedPreviousReportPath": "/app/applet/reports/archive/source_grounded_download_report.2026-11-13T15-53-02-071Z.json",
+  "interruptedReason": null,
+  "metadata": {},
+  "summary": {
+    "total": 4,
+    "passed": 3,
+    "failed": 1,
+    "incomplete": 0,
+    "skipped": 0
+  },
+  "tests": {
+    "req1_metadata_and_adaptive_sampling": {
+      "name": "req1_metadata_and_adaptive_sampling",
+      "status": "passed",
+      "startedAt": "2026-11-13T15:53:09.410Z",
+      "completedAt": "2026-11-13T15:53:15.285Z",
+      "elapsedMs": 5875,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "probe": {
+          "duration": 75,
+          "width": 1280,
+          "height": 720,
+          "format": "mov,mp4,m4a,3gp,3g2,mj2",
+          "bitrate": 267984,
+          "fps": 24,
+          "hasAudio": true
+        },
+        "sceneTransitions": [
+          25,
+          55
+        ],
+        "sampledTimestamps": [
+          9.4,
+          18.8,
+          25.8,
+          28.1,
+          37.5,
+          46.9,
+          55.8,
+          65.6
+        ]
+      }
+    },
+    "req1_interval_audio_and_visual_motion": {
+      "name": "req1_interval_audio_and_visual_motion",
+      "status": "passed",
+      "startedAt": "2026-11-13T15:53:15.292Z",
+      "completedAt": "2026-11-13T15:53:17.316Z",
+      "elapsedMs": 2024,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "activeAudio": {
+          "audioActive": true,
+          "meanVolumeDb": -16,
+          "maxVolumeDb": -11.7
+        },
+        "silentInterval": {
+          "audioActive": false,
+          "meanVolumeDb": -91,
+          "maxVolumeDb": -91
+        },
+        "activeMotion": {
+          "hasVisualProgression": true,
+          "meanPixelDeltaRatio": 0.00103
+        },
+        "frozenMotion": {
+          "hasVisualProgression": false,
+          "meanPixelDeltaRatio": 0
+        }
+      }
+    },
+    "req1_no_guessed_clips_verification": {
+      "name": "req1_no_guessed_clips_verification",
+      "status": "passed",
+      "startedAt": "2026-11-13T15:53:17.317Z",
+      "completedAt": "2026-11-13T15:53:29.264Z",
+      "elapsedMs": 11947,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "frozenRejectedReason": "Static frozen frames with no visual progression and no active audio in candidate interval.",
+        "lowConfRejectedReason": "Model confidence too low (35%) to justify selection.",
+        "mismatchRejectedReason": "Claimed quote does not match the verified transcript in this interval (token overlap 0%).",
+        "noTranscriptStatus": "uncertain",
+        "verifiedStatus": "verified"
+      }
+    },
+    "req2_permanent_download_and_active_transfer_lock": {
+      "name": "req2_permanent_download_and_active_transfer_lock",
+      "status": "failed",
+      "startedAt": "2026-11-13T15:53:29.266Z",
+      "completedAt": "2026-11-13T15:53:54.443Z",
+      "elapsedMs": 25177,
+      "error": "ASSERTION FAILED: Expected HTTP 409 Conflict deleting during active download, got 200",
+      "telemetry": null
+    }
+  }
+}

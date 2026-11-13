@@ -27,11 +27,12 @@ export function clearStoredToken(): void {
   localStorage.removeItem(TOKEN_KEY);
 }
 
-function getAuthHeaders(): HeadersInit {
+function getAuthHeaders(includeContentType = true): Record<string, string> {
   const token = getStoredToken();
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
+  const headers: Record<string, string> = {};
+  if (includeContentType) {
+    headers['Content-Type'] = 'application/json';
+  }
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
@@ -39,10 +40,13 @@ function getAuthHeaders(): HeadersInit {
 }
 
 // Safe native fetch wrapper: invokes native browser fetch without overriding global properties
-// and guards against unexpected HTML fallbacks
+// and sends same-origin session cookies + auth headers cleanly
 async function safeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const fetchFn = typeof window !== 'undefined' && window.fetch ? window.fetch.bind(window) : globalThis.fetch;
-  const res = await fetchFn(input, init);
+  const res = await fetchFn(input, {
+    credentials: 'include',
+    ...init,
+  });
   return res;
 }
 
@@ -65,9 +69,8 @@ async function safeJson<T = any>(res: Response): Promise<T> {
 export const api = {
   // System Health
   async getSystemStatus(): Promise<SystemStatus> {
-    const token = getStoredToken();
     const res = await safeFetch('/api/system/status', {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: getAuthHeaders(false),
     });
     if (!res.ok) throw new Error('Failed to fetch system status');
     return safeJson(res);
@@ -87,22 +90,17 @@ export const api = {
   },
 
   async logoutOwner(): Promise<void> {
-    const token = getStoredToken();
-    if (token) {
-      await safeFetch('/api/auth/logout', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => {});
-    }
+    await safeFetch('/api/auth/logout', {
+      method: 'POST',
+      headers: getAuthHeaders(false),
+    }).catch(() => {});
     clearStoredToken();
   },
 
   async checkAuth(): Promise<boolean> {
-    const token = getStoredToken();
-    if (!token) return false;
     try {
       const res = await safeFetch('/api/auth/check', {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: getAuthHeaders(false),
       });
       const data = await safeJson(res);
       return Boolean(data.authenticated);
@@ -123,13 +121,18 @@ export const api = {
 
   // Videos List & Management
   async getVideos(): Promise<VideoMetadata[]> {
-    const res = await safeFetch('/api/videos');
+    const res = await safeFetch('/api/videos', {
+      headers: getAuthHeaders(false),
+    });
     const data = await safeJson(res);
+    if (!res.ok) throw new Error(data.error || 'Failed to fetch videos');
     return data.videos || [];
   },
 
   async getVideo(id: string): Promise<VideoMetadata> {
-    const res = await safeFetch(`/api/videos/item/${id}`);
+    const res = await safeFetch(`/api/videos/item/${id}`, {
+      headers: getAuthHeaders(false),
+    });
     const data = await safeJson(res);
     if (!res.ok) throw new Error(data.error || 'Video not found');
     return data.video;
@@ -138,7 +141,7 @@ export const api = {
   async deleteVideo(id: string): Promise<void> {
     const res = await safeFetch(`/api/videos/${id}`, {
       method: 'DELETE',
-      headers: getAuthHeaders(),
+      headers: getAuthHeaders(false),
     });
     const data = await safeJson(res);
     if (!res.ok) throw new Error(data.error || 'Failed to delete video');
@@ -149,15 +152,9 @@ export const api = {
     const formData = new FormData();
     formData.append('video', file);
 
-    const token = getStoredToken();
-    const headers: Record<string, string> = {};
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
     const res = await safeFetch('/api/videos/upload', {
       method: 'POST',
-      headers,
+      headers: getAuthHeaders(false),
       body: formData,
     });
 
@@ -173,7 +170,7 @@ export const api = {
   }> {
     const res = await safeFetch('/api/videos/sample', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ sampleType }),
     });
 
@@ -233,7 +230,17 @@ export const api = {
       });
 
       const data = await safeJson(res);
-      if (!res.ok) throw new Error(data.error || 'AI analysis failed');
+      if (!res.ok) {
+        const err = new Error(data.error || 'AI analysis failed') as Error & {
+          statusCode?: number;
+          quotaExhausted?: boolean;
+          resetAt?: string;
+        };
+        err.statusCode = res.status;
+        if (data.quotaExhausted !== undefined) err.quotaExhausted = Boolean(data.quotaExhausted);
+        if (data.resetAt) err.resetAt = String(data.resetAt);
+        throw err;
+      }
       return data;
     } finally {
       clearTimeout(timeoutId);
@@ -244,10 +251,109 @@ export const api = {
   async deleteRenderJob(jobId: string): Promise<void> {
     const res = await safeFetch(`/api/clips/render/${jobId}`, {
       method: 'DELETE',
-      headers: getAuthHeaders(),
+      headers: getAuthHeaders(false),
     });
     const data = await safeJson(res);
     if (!res.ok) throw new Error(data.error || 'Failed to delete render');
+  },
+
+  // List persisted & active render jobs
+  async getRenderJobs(): Promise<RenderJob[]> {
+    const res = await safeFetch('/api/clips/jobs', {
+      headers: getAuthHeaders(false),
+    });
+    const data = await safeJson(res);
+    if (!res.ok) throw new Error(data.error || 'Failed to load render jobs');
+    return data.jobs || [];
+  },
+
+  // Authenticated, integrity-checked local MP4 download
+  async downloadRenderedClip(
+    job: Pick<RenderJob, 'id' | 'title' | 'downloadUrl' | 'outputFilename' | 'aspectRatio'>,
+    onProgress?: (progress: { receivedBytes: number; totalBytes?: number; percent: number }) => void
+  ): Promise<{ filename: string; bytes: number }> {
+    const url = job.downloadUrl || `/api/clips/download/${job.id}`;
+    const res = await safeFetch(url, {
+      method: 'GET',
+      headers: getAuthHeaders(false),
+    });
+
+    if (!res.ok) {
+      let errMsg = `Download failed (HTTP ${res.status})`;
+      try {
+        const errData = await safeJson(res);
+        if (errData?.error) errMsg = errData.error;
+      } catch {}
+      throw new Error(errMsg);
+    }
+
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('video/mp4') && !contentType.includes('application/octet-stream')) {
+      throw new Error(`Unexpected response type "${contentType || 'unknown'}" instead of MP4`);
+    }
+
+    const totalLenHeader = res.headers.get('content-length');
+    const totalBytes = totalLenHeader ? parseInt(totalLenHeader, 10) : undefined;
+
+    // Parse suggested filename from Content-Disposition or build safe fallback
+    const disposition = res.headers.get('content-disposition') || '';
+    const match = disposition.match(/filename\*?=(?:UTF-8''|"?)([^";\n]+)"?/i);
+    const safeFallback = `${(job.title || 'clip').replace(/[^a-zA-Z0-9_-]/g, '_')}_${(job.aspectRatio || '9:16').replace(':', 'x')}.mp4`;
+    const filename = match?.[1] ? decodeURIComponent(match[1].replace(/"/g, '').trim()) : job.outputFilename || safeFallback;
+
+    const chunks: Uint8Array[] = [];
+    let receivedBytes = 0;
+
+    if (res.body && typeof res.body.getReader === 'function') {
+      const reader = res.body.getReader();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value && value.byteLength > 0) {
+          chunks.push(value);
+          receivedBytes += value.byteLength;
+          const percent = totalBytes && totalBytes > 0 ? Math.min(99, Math.round((receivedBytes / totalBytes) * 100)) : 50;
+          onProgress?.({ receivedBytes, totalBytes, percent });
+        }
+      }
+    } else {
+      const buf = new Uint8Array(await res.arrayBuffer());
+      chunks.push(buf);
+      receivedBytes = buf.byteLength;
+      onProgress?.({ receivedBytes, totalBytes, percent: 99 });
+    }
+
+    if (receivedBytes === 0) {
+      throw new Error('Downloaded MP4 stream was empty (0 bytes received).');
+    }
+
+    if (totalBytes && !isNaN(totalBytes) && totalBytes > 0 && receivedBytes !== totalBytes) {
+      throw new Error(
+        `Incomplete MP4 transfer: received ${receivedBytes} of ${totalBytes} expected bytes.`
+      );
+    }
+
+    onProgress?.({ receivedBytes, totalBytes, percent: 100 });
+
+    const blobParts = chunks.map((c) => c.slice().buffer);
+    const blob = new Blob(blobParts, { type: 'video/mp4' });
+    const blobUrl = URL.createObjectURL(blob);
+
+    try {
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } finally {
+      window.setTimeout(() => {
+        URL.revokeObjectURL(blobUrl);
+      }, 15000);
+    }
+
+    return { filename, bytes: receivedBytes };
   },
 
   // FFmpeg Clip Rendering
@@ -265,7 +371,7 @@ export const api = {
       body: JSON.stringify(params),
     });
 
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) throw new Error(data.error || 'Failed to start render');
     return data.job;
   },
@@ -288,7 +394,7 @@ export const api = {
       body: JSON.stringify(params),
     });
 
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) throw new Error(data.error || 'Failed to dispatch batch render');
     return data;
   },
@@ -297,10 +403,10 @@ export const api = {
   async retryRenderJob(jobId: string): Promise<{ success: boolean; job: RenderJob }> {
     const res = await safeFetch(`/api/clips/retry/${jobId}`, {
       method: 'POST',
-      headers: getAuthHeaders(),
+      headers: getAuthHeaders(false),
     });
 
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) throw new Error(data.error || 'Failed to retry render job');
     return data;
   },
@@ -320,24 +426,31 @@ export const api = {
       recommendations: string[];
     };
   }> {
-    const res = await safeFetch(`/api/quality/inspect/${videoId}`);
-    const data = await res.json();
+    const res = await safeFetch(`/api/quality/inspect/${videoId}`, {
+      headers: getAuthHeaders(false),
+    });
+    const data = await safeJson(res);
     if (!res.ok) throw new Error(data.error || 'Failed to inspect video quality');
     return data;
   },
 
   // Check Render Job Status
   async getRenderJobStatus(jobId: string): Promise<RenderJob> {
-    const res = await safeFetch(`/api/clips/status/${jobId}`);
-    const data = await res.json();
+    const res = await safeFetch(`/api/clips/status/${jobId}`, {
+      headers: getAuthHeaders(false),
+    });
+    const data = await safeJson(res);
     if (!res.ok) throw new Error(data.error || 'Job not found');
     return data.job;
   },
 
   // Projects & Supabase
   async getProjects(): Promise<ProjectData[]> {
-    const res = await safeFetch('/api/projects');
-    const data = await res.json();
+    const res = await safeFetch('/api/projects', {
+      headers: getAuthHeaders(false),
+    });
+    const data = await safeJson(res);
+    if (!res.ok) throw new Error(data.error || 'Failed to load projects');
     return data.projects || [];
   },
 
@@ -347,7 +460,7 @@ export const api = {
       headers: getAuthHeaders(),
       body: JSON.stringify(project),
     });
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) throw new Error(data.error || 'Failed to save project');
     return data.project;
   },
@@ -359,30 +472,35 @@ export const api = {
     schemaSql: string;
   }> {
     const res = await safeFetch('/api/database/status');
-    return res.json();
+    return safeJson(res);
   },
 
   // Resource Management & Storage
   async getSystemResources(): Promise<import('../types/index.ts').SystemResourceInfo> {
     const res = await safeFetch('/api/system/resources');
     if (!res.ok) throw new Error('Failed to fetch system resources');
-    return res.json();
+    return safeJson(res);
   },
 
   async getStorageInfo(): Promise<import('../types/index.ts').StorageArchitectureInfo> {
     const res = await safeFetch('/api/storage/info');
     if (!res.ok) throw new Error('Failed to fetch storage info');
-    return res.json();
+    return safeJson(res);
   },
 
   async getUploadStatus(uploadId: string): Promise<import('../types/index.ts').ResumableUploadSession> {
-    const res = await safeFetch(`/api/upload/status/${uploadId}`);
+    const res = await safeFetch(`/api/upload/status/${uploadId}`, {
+      headers: getAuthHeaders(false),
+    });
     if (!res.ok) throw new Error('Failed to fetch upload status');
-    return res.json();
+    return safeJson(res);
   },
 
   async cancelUpload(uploadId: string): Promise<void> {
-    await safeFetch(`/api/upload/cancel/${uploadId}`, { method: 'DELETE' });
+    await safeFetch(`/api/upload/cancel/${uploadId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(false),
+    });
   },
 
   // Validation Check
@@ -397,7 +515,7 @@ export const api = {
       body: JSON.stringify(params),
     });
     if (!res.ok) throw new Error('Validation check failed');
-    return res.json();
+    return safeJson(res);
   },
 
   // Individual Clip Publishing
@@ -419,21 +537,24 @@ export const api = {
       headers: getAuthHeaders(),
       body: JSON.stringify(payload),
     });
-    const data = await res.json();
+    const data = await safeJson(res);
     if (!res.ok) throw new Error(data.error || 'Publishing failed');
     return data;
   },
 
   async getPublishedClips(): Promise<PublishedClip[]> {
-    const res = await safeFetch('/api/clips/published');
-    const data = await res.json();
+    const res = await safeFetch('/api/clips/published', {
+      headers: getAuthHeaders(false),
+    });
+    const data = await safeJson(res);
+    if (!res.ok) throw new Error(data.error || 'Failed to fetch published clips');
     return data.published || [];
   },
 
   async deletePublishedClip(id: string): Promise<void> {
     const res = await safeFetch(`/api/clips/publish/${id}`, {
       method: 'DELETE',
-      headers: getAuthHeaders(),
+      headers: getAuthHeaders(false),
     });
     if (!res.ok) throw new Error('Failed to unpublish clip');
   },

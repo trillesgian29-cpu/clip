@@ -1,0 +1,276 @@
+{
+  "reportVersion": "2.0",
+  "runId": "run-1794581335395-3544",
+  "runStatus": "completed",
+  "startedAt": "2026-11-13T14:48:55.394Z",
+  "updatedAt": "2026-11-13T14:48:56.411Z",
+  "completedAt": "2026-11-13T14:48:56.411Z",
+  "archivedPreviousReportPath": "/app/applet/reports/archive/json_repair_strict_report.2026-11-13T14-48-55-396Z.json",
+  "interruptedReason": null,
+  "metadata": {
+    "counts": {
+      "total": 20,
+      "passed": 17,
+      "failed": 0,
+      "skipped": 3
+    }
+  },
+  "summary": {
+    "total": 20,
+    "passed": 17,
+    "failed": 0,
+    "incomplete": 0,
+    "skipped": 3
+  },
+  "tests": {
+    "test_01_valid_raw_json_parses_cleanly": {
+      "name": "test_01_valid_raw_json_parses_cleanly",
+      "status": "passed",
+      "startedAt": "2026-11-13T14:48:55.400Z",
+      "completedAt": "2026-11-13T14:48:55.403Z",
+      "elapsedMs": 3,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Valid raw JSON parses cleanly",
+        "detail": ""
+      }
+    },
+    "test_02_extracts_clean_json_from_json_code_fence": {
+      "name": "test_02_extracts_clean_json_from_json_code_fence",
+      "status": "passed",
+      "startedAt": "2026-11-13T14:48:55.407Z",
+      "completedAt": "2026-11-13T14:48:55.409Z",
+      "elapsedMs": 2,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Extracts clean JSON from ```json code fence",
+        "detail": ""
+      }
+    },
+    "test_03_cleaned_fenced_json_parses_successfully_with_jso": {
+      "name": "test_03_cleaned_fenced_json_parses_successfully_with_jso",
+      "status": "passed",
+      "startedAt": "2026-11-13T14:48:55.409Z",
+      "completedAt": "2026-11-13T14:48:55.410Z",
+      "elapsedMs": 1,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Cleaned fenced JSON parses successfully with JSON.parse",
+        "detail": ""
+      }
+    },
+    "test_04_sanitizer_cleans_trailing_commas_before_closing_": {
+      "name": "test_04_sanitizer_cleans_trailing_commas_before_closing_",
+      "status": "passed",
+      "startedAt": "2026-11-13T14:48:55.411Z",
+      "completedAt": "2026-11-13T14:48:55.412Z",
+      "elapsedMs": 1,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Sanitizer cleans trailing commas before closing braces/brackets",
+        "detail": ""
+      }
+    },
+    "test_05_truncated_json_output_is_rejected_rather_than_pa": {
+      "name": "test_05_truncated_json_output_is_rejected_rather_than_pa",
+      "status": "passed",
+      "startedAt": "2026-11-13T14:48:55.412Z",
+      "completedAt": "2026-11-13T14:48:55.412Z",
+      "elapsedMs": 0,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Truncated JSON output is rejected rather than partially fabricated",
+        "detail": ""
+      }
+    },
+    "test_06_empty_raw_response_string_sanitizes_to_empty_str": {
+      "name": "test_06_empty_raw_response_string_sanitizes_to_empty_str",
+      "status": "passed",
+      "startedAt": "2026-11-13T14:48:55.413Z",
+      "completedAt": "2026-11-13T14:48:55.413Z",
+      "elapsedMs": 0,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Empty raw response string sanitizes to empty string cleanly",
+        "detail": ""
+      }
+    },
+    "test_07_unexpected_response_format_yields_zero_clip_cand": {
+      "name": "test_07_unexpected_response_format_yields_zero_clip_cand",
+      "status": "passed",
+      "startedAt": "2026-11-13T14:48:55.413Z",
+      "completedAt": "2026-11-13T14:48:55.413Z",
+      "elapsedMs": 0,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Unexpected response format yields zero clip candidates rather than fabricating",
+        "detail": ""
+      }
+    },
+    "test_08_candidate_normalized_successfully": {
+      "name": "test_08_candidate_normalized_successfully",
+      "status": "passed",
+      "startedAt": "2026-11-13T14:48:55.414Z",
+      "completedAt": "2026-11-13T14:48:55.414Z",
+      "elapsedMs": 0,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Candidate normalized successfully",
+        "detail": ""
+      }
+    },
+    "test_09_timestamps_converted_to_numeric": {
+      "name": "test_09_timestamps_converted_to_numeric",
+      "status": "passed",
+      "startedAt": "2026-11-13T14:48:55.414Z",
+      "completedAt": "2026-11-13T14:48:55.415Z",
+      "elapsedMs": 1,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Timestamps converted to numeric",
+        "detail": ""
+      }
+    },
+    "test_10_scores_correctly_scaled_from_0_1_to_0_10_scale": {
+      "name": "test_10_scores_correctly_scaled_from_0_1_to_0_10_scale",
+      "status": "passed",
+      "startedAt": "2026-11-13T14:48:55.415Z",
+      "completedAt": "2026-11-13T14:48:55.415Z",
+      "elapsedMs": 0,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Scores correctly scaled from 0-1 to 0-10 scale",
+        "detail": ""
+      }
+    },
+    "test_11_alternate_hooks_preserved": {
+      "name": "test_11_alternate_hooks_preserved",
+      "status": "passed",
+      "startedAt": "2026-11-13T14:48:55.416Z",
+      "completedAt": "2026-11-13T14:48:55.416Z",
+      "elapsedMs": 0,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Alternate hooks preserved",
+        "detail": ""
+      }
+    },
+    "test_12_null_or_empty_string_timestamps_are_rejected_cle": {
+      "name": "test_12_null_or_empty_string_timestamps_are_rejected_cle",
+      "status": "passed",
+      "startedAt": "2026-11-13T14:48:55.417Z",
+      "completedAt": "2026-11-13T14:48:55.418Z",
+      "elapsedMs": 1,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Null or empty string timestamps are rejected cleanly (never coerced to 0)",
+        "detail": ""
+      }
+    },
+    "test_13_negative_reversed_and_out_of_bounds_timestamps_a": {
+      "name": "test_13_negative_reversed_and_out_of_bounds_timestamps_a",
+      "status": "passed",
+      "startedAt": "2026-11-13T14:48:55.419Z",
+      "completedAt": "2026-11-13T14:48:55.420Z",
+      "elapsedMs": 1,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Negative, reversed, and out-of-bounds timestamps are rejected",
+        "detail": ""
+      }
+    },
+    "test_14_openrouter_daily_429_classified_as_isdailyquotae": {
+      "name": "test_14_openrouter_daily_429_classified_as_isdailyquotae",
+      "status": "passed",
+      "startedAt": "2026-11-13T14:48:55.423Z",
+      "completedAt": "2026-11-13T14:48:55.424Z",
+      "elapsedMs": 1,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "OpenRouter daily 429 classified as isDailyQuotaExhausted=true without leaking user_id",
+        "detail": ""
+      }
+    },
+    "test_15_short_term_rpm_429_classified_as_isdailyquotaexh": {
+      "name": "test_15_short_term_rpm_429_classified_as_isdailyquotaexh",
+      "status": "passed",
+      "startedAt": "2026-11-13T14:48:55.425Z",
+      "completedAt": "2026-11-13T14:48:55.426Z",
+      "elapsedMs": 1,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Short-term RPM 429 classified as isDailyQuotaExhausted=false and repair errors scrub user_id",
+        "detail": ""
+      }
+    },
+    "test_16_1_shot_json_repair_via_openrouter_4_checks_": {
+      "name": "test_16_1_shot_json_repair_via_openrouter_4_checks_",
+      "status": "skipped",
+      "startedAt": "2026-11-13T14:48:55.427Z",
+      "completedAt": "2026-11-13T14:48:55.427Z",
+      "elapsedMs": 0,
+      "error": "Skipped via --unit-only (OpenRouter free-tier quota guard)",
+      "telemetry": null
+    },
+    "test_17_static_single_slide_negative_test": {
+      "name": "test_17_static_single_slide_negative_test",
+      "status": "skipped",
+      "startedAt": "2026-11-13T14:48:55.429Z",
+      "completedAt": "2026-11-13T14:48:55.429Z",
+      "elapsedMs": 0,
+      "error": "Skipped via --unit-only (OpenRouter free-tier quota guard)",
+      "telemetry": null
+    },
+    "test_18_live_strict_nemotron_coherent_fixture_8_checks_": {
+      "name": "test_18_live_strict_nemotron_coherent_fixture_8_checks_",
+      "status": "skipped",
+      "startedAt": "2026-11-13T14:48:55.431Z",
+      "completedAt": "2026-11-13T14:48:55.431Z",
+      "elapsedMs": 0,
+      "error": "Skipped via --unit-only (OpenRouter free-tier quota guard)",
+      "telemetry": null
+    },
+    "test_19_strict_mode_throws_error_instead_of_calling_gemi": {
+      "name": "test_19_strict_mode_throws_error_instead_of_calling_gemi",
+      "status": "passed",
+      "startedAt": "2026-11-13T14:48:55.437Z",
+      "completedAt": "2026-11-13T14:48:55.437Z",
+      "elapsedMs": 0,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Strict mode throws error instead of calling Gemini",
+        "detail": "Strict Nemotron Mode failed: Source video file does not exist at /tmp/non-existent-video.mp4",
+        "error": "Strict Nemotron Mode failed: Source video file does not exist at /tmp/non-existent-video.mp4"
+      }
+    },
+    "test_20_auto_fallback_mode_routes_to_gemini_without_fake": {
+      "name": "test_20_auto_fallback_mode_routes_to_gemini_without_fake",
+      "status": "passed",
+      "startedAt": "2026-11-13T14:48:56.406Z",
+      "completedAt": "2026-11-13T14:48:56.410Z",
+      "elapsedMs": 4,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Auto fallback mode routes to Gemini without fake templates",
+        "detail": "Verified honest upstream Gemini 403 error propagation (no fake fallback): Auto Fallback failed: Nemotron primary failed (Source video file does not exist at /tmp/non-existent-video-auto-fallback.mp4); Gemini fallback failed (Gemini upstream API failed (HTTP 403): {\"error\":{\"code\":403,\"message\":\"The Gemini API free tier is not available for this project. To use the Gemini API, please set up billing to upgrade to the paid tier at https://aistudio.google.com/billing. For more information, see https://ai.google.dev/gemini-api/docs/troubleshooting#project-unavailable.\",\"status\":\"PERMISSION_DENIED\"}})"
+      }
+    }
+  }
+}

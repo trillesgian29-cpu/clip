@@ -1,0 +1,198 @@
+{
+  "reportVersion": "2.0",
+  "runId": "run-1794578046747-7801",
+  "runStatus": "failed",
+  "startedAt": "2026-11-13T13:54:06.746Z",
+  "updatedAt": "2026-11-13T13:54:07.643Z",
+  "completedAt": "2026-11-13T13:54:07.643Z",
+  "archivedPreviousReportPath": "/app/applet/reports/archive/json_repair_strict_report.2026-11-13T13-54-06-747Z.json",
+  "interruptedReason": null,
+  "metadata": {
+    "counts": {
+      "total": 14,
+      "passed": 10,
+      "failed": 1,
+      "skipped": 3
+    }
+  },
+  "summary": {
+    "total": 14,
+    "passed": 10,
+    "failed": 1,
+    "incomplete": 0,
+    "skipped": 3
+  },
+  "tests": {
+    "test_01_valid_raw_json_parses_cleanly": {
+      "name": "test_01_valid_raw_json_parses_cleanly",
+      "status": "passed",
+      "startedAt": "2026-11-13T13:54:06.748Z",
+      "completedAt": "2026-11-13T13:54:06.752Z",
+      "elapsedMs": 4,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Valid raw JSON parses cleanly",
+        "detail": ""
+      }
+    },
+    "test_02_extracts_clean_json_from_json_code_fence": {
+      "name": "test_02_extracts_clean_json_from_json_code_fence",
+      "status": "passed",
+      "startedAt": "2026-11-13T13:54:06.755Z",
+      "completedAt": "2026-11-13T13:54:06.755Z",
+      "elapsedMs": 0,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Extracts clean JSON from ```json code fence",
+        "detail": ""
+      }
+    },
+    "test_03_cleaned_fenced_json_parses_successfully_with_jso": {
+      "name": "test_03_cleaned_fenced_json_parses_successfully_with_jso",
+      "status": "passed",
+      "startedAt": "2026-11-13T13:54:06.756Z",
+      "completedAt": "2026-11-13T13:54:06.756Z",
+      "elapsedMs": 0,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Cleaned fenced JSON parses successfully with JSON.parse",
+        "detail": ""
+      }
+    },
+    "test_04_sanitizer_cleans_trailing_commas_before_closing_": {
+      "name": "test_04_sanitizer_cleans_trailing_commas_before_closing_",
+      "status": "passed",
+      "startedAt": "2026-11-13T13:54:06.756Z",
+      "completedAt": "2026-11-13T13:54:06.757Z",
+      "elapsedMs": 1,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Sanitizer cleans trailing commas before closing braces/brackets",
+        "detail": ""
+      }
+    },
+    "test_05_truncated_json_output_is_rejected_rather_than_pa": {
+      "name": "test_05_truncated_json_output_is_rejected_rather_than_pa",
+      "status": "passed",
+      "startedAt": "2026-11-13T13:54:06.757Z",
+      "completedAt": "2026-11-13T13:54:06.757Z",
+      "elapsedMs": 0,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Truncated JSON output is rejected rather than partially fabricated",
+        "detail": ""
+      }
+    },
+    "test_06_candidate_normalized_successfully": {
+      "name": "test_06_candidate_normalized_successfully",
+      "status": "passed",
+      "startedAt": "2026-11-13T13:54:06.758Z",
+      "completedAt": "2026-11-13T13:54:06.758Z",
+      "elapsedMs": 0,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Candidate normalized successfully",
+        "detail": ""
+      }
+    },
+    "test_07_timestamps_converted_to_numeric": {
+      "name": "test_07_timestamps_converted_to_numeric",
+      "status": "passed",
+      "startedAt": "2026-11-13T13:54:06.758Z",
+      "completedAt": "2026-11-13T13:54:06.758Z",
+      "elapsedMs": 0,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Timestamps converted to numeric",
+        "detail": ""
+      }
+    },
+    "test_08_scores_correctly_scaled_from_0_1_to_0_10_scale": {
+      "name": "test_08_scores_correctly_scaled_from_0_1_to_0_10_scale",
+      "status": "passed",
+      "startedAt": "2026-11-13T13:54:06.758Z",
+      "completedAt": "2026-11-13T13:54:06.759Z",
+      "elapsedMs": 1,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Scores correctly scaled from 0-1 to 0-10 scale",
+        "detail": ""
+      }
+    },
+    "test_09_alternate_hooks_preserved": {
+      "name": "test_09_alternate_hooks_preserved",
+      "status": "passed",
+      "startedAt": "2026-11-13T13:54:06.759Z",
+      "completedAt": "2026-11-13T13:54:06.760Z",
+      "elapsedMs": 1,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Alternate hooks preserved",
+        "detail": ""
+      }
+    },
+    "test_10_1_shot_json_repair_via_openrouter_4_checks_": {
+      "name": "test_10_1_shot_json_repair_via_openrouter_4_checks_",
+      "status": "skipped",
+      "startedAt": "2026-11-13T13:54:06.760Z",
+      "completedAt": "2026-11-13T13:54:06.760Z",
+      "elapsedMs": 0,
+      "error": "Skipped via --unit-only (OpenRouter free-tier quota guard)",
+      "telemetry": null
+    },
+    "test_11_static_single_slide_negative_test": {
+      "name": "test_11_static_single_slide_negative_test",
+      "status": "skipped",
+      "startedAt": "2026-11-13T13:54:06.760Z",
+      "completedAt": "2026-11-13T13:54:06.760Z",
+      "elapsedMs": 0,
+      "error": "Skipped via --unit-only (OpenRouter free-tier quota guard)",
+      "telemetry": null
+    },
+    "test_12_live_strict_nemotron_coherent_fixture_8_checks_": {
+      "name": "test_12_live_strict_nemotron_coherent_fixture_8_checks_",
+      "status": "skipped",
+      "startedAt": "2026-11-13T13:54:06.761Z",
+      "completedAt": "2026-11-13T13:54:06.761Z",
+      "elapsedMs": 0,
+      "error": "Skipped via --unit-only (OpenRouter free-tier quota guard)",
+      "telemetry": null
+    },
+    "test_13_strict_mode_throws_error_instead_of_calling_gemi": {
+      "name": "test_13_strict_mode_throws_error_instead_of_calling_gemi",
+      "status": "passed",
+      "startedAt": "2026-11-13T13:54:06.764Z",
+      "completedAt": "2026-11-13T13:54:06.764Z",
+      "elapsedMs": 0,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Strict mode throws error instead of calling Gemini",
+        "detail": "Strict Nemotron Mode failed: Source video file does not exist at /tmp/non-existent-video.mp4",
+        "error": "Strict Nemotron Mode failed: Source video file does not exist at /tmp/non-existent-video.mp4"
+      }
+    },
+    "test_14_auto_fallback_mode_routes_to_gemini_without_fake": {
+      "name": "test_14_auto_fallback_mode_routes_to_gemini_without_fake",
+      "status": "failed",
+      "startedAt": "2026-11-13T13:54:07.642Z",
+      "completedAt": "2026-11-13T13:54:07.642Z",
+      "elapsedMs": 0,
+      "error": "Auto fallback mode routes to Gemini without fake templates (Auto Fallback failed: Nemotron primary failed (Source video file does not exist at /tmp/non-existent-video-auto-fallback.mp4); Gemini fallback failed (Gemini upstream API failed (HTTP 403): {\"error\":{\"code\":403,\"message\":\"The Gemini API free tier is not available for this project. To use the Gemini API, please set up billing to upgrade to the paid tier at https://aistudio.google.com/billing. For more information, see https://ai.google.dev/gemini-api/docs/troubleshooting#project-unavailable.\",\"status\":\"PERMISSION_DENIED\"}}))",
+      "telemetry": null,
+      "details": {
+        "label": "Auto fallback mode routes to Gemini without fake templates",
+        "detail": "Auto Fallback failed: Nemotron primary failed (Source video file does not exist at /tmp/non-existent-video-auto-fallback.mp4); Gemini fallback failed (Gemini upstream API failed (HTTP 403): {\"error\":{\"code\":403,\"message\":\"The Gemini API free tier is not available for this project. To use the Gemini API, please set up billing to upgrade to the paid tier at https://aistudio.google.com/billing. For more information, see https://ai.google.dev/gemini-api/docs/troubleshooting#project-unavailable.\",\"status\":\"PERMISSION_DENIED\"}})"
+      }
+    }
+  }
+}

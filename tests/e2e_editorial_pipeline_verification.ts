@@ -290,14 +290,36 @@ async function generateVisualOnlyVideo(outPath: string): Promise<void> {
   ]);
 }
 
+let ownerBearerToken = '';
+
+async function authenticateOwner(): Promise<string> {
+  if (ownerBearerToken) return ownerBearerToken;
+  const passcode = process.env.OWNER_PASSCODE || 'clipgenius-owner-2026';
+  const res = await fetch(`${API_BASE}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ passcode }),
+  });
+  const data = await res.json();
+  if (!res.ok || !data?.token) {
+    throw new Error(`Owner auth failed (${res.status}): ${redactSensitiveText(JSON.stringify(data))}`);
+  }
+  ownerBearerToken = data.token;
+  return ownerBearerToken;
+}
+
 async function uploadVideoFile(filepath: string, name: string) {
+  const token = await authenticateOwner();
   const buf = fs.readFileSync(filepath);
   const form = new FormData();
   form.append('video', new Blob([buf], { type: 'video/mp4' }), name);
 
   const res = await fetch(`${API_BASE}/api/videos/upload`, {
     method: 'POST',
-    headers: { Connection: 'close' },
+    headers: {
+      Connection: 'close',
+      Authorization: `Bearer ${token}`,
+    },
     body: form,
   });
   const data = await res.json();
@@ -321,6 +343,7 @@ class AnalyzeRequestError extends Error {
 }
 
 async function analyzeStrict(payload: Record<string, any>) {
+  const token = await authenticateOwner();
   const t0 = Date.now();
   let res: Response;
   try {
@@ -330,6 +353,7 @@ async function analyzeStrict(payload: Record<string, any>) {
       headers: {
         'Content-Type': 'application/json',
         Connection: 'close',
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
         preferredProvider: 'strict_nemotron',
@@ -380,8 +404,30 @@ async function analyzeStrict(payload: Record<string, any>) {
 }
 
 let liveAnalyzeCallIndex = 0;
+let dailyQuotaResetAt: string | null = null;
+
+function isDailyQuotaError(err: unknown): boolean {
+  if (err instanceof AnalyzeRequestError) {
+    if (err.data?.isDailyQuotaExhausted) return true;
+    const msg = err.message.toLowerCase();
+    return (
+      msg.includes('daily free quota exhausted') ||
+      msg.includes('free-models-per-day') ||
+      msg.includes('openrouter_free_tier_daily')
+    );
+  }
+  return false;
+}
 
 async function analyzeStrictPaced(payload: Record<string, any>) {
+  if (dailyQuotaResetAt) {
+    throw new AnalyzeRequestError(
+      `OpenRouter daily free quota already exhausted (reset at ${dailyQuotaResetAt}); skipping further API calls.`,
+      429,
+      { isDailyQuotaExhausted: true, rateLimitResetAt: dailyQuotaResetAt },
+      0
+    );
+  }
   if (liveAnalyzeCallIndex > 0) {
     console.log('[Test Pacing] Waiting 20s between live OpenRouter free-tier requests...');
     await new Promise((r) => setTimeout(r, 20000));
@@ -391,11 +437,25 @@ async function analyzeStrictPaced(payload: Record<string, any>) {
   try {
     return await analyzeStrict(payload);
   } catch (err) {
+    if (isDailyQuotaError(err)) {
+      const reqErr = err as AnalyzeRequestError;
+      dailyQuotaResetAt = reqErr.data?.rateLimitResetAt || 'next UTC midnight';
+      console.warn(`[Test Pacing] OpenRouter daily quota exhausted (reset=${dailyQuotaResetAt}). Aborting retries cleanly.`);
+      throw err;
+    }
     const msg = (err as Error)?.message || '';
     if (msg.includes('HTTP 429') || msg.includes('rate limit')) {
-      console.warn('[Test Pacing] OpenRouter free-tier HTTP 429 hit. Waiting 65s for window reset before 1 paced retry...');
+      console.warn('[Test Pacing] OpenRouter free-tier transient HTTP 429 hit. Waiting 65s for window reset before 1 paced retry...');
       await new Promise((r) => setTimeout(r, 65000));
-      return await analyzeStrict(payload);
+      try {
+        return await analyzeStrict(payload);
+      } catch (retryErr) {
+        if (isDailyQuotaError(retryErr)) {
+          const reqErr = retryErr as AnalyzeRequestError;
+          dailyQuotaResetAt = reqErr.data?.rateLimitResetAt || 'next UTC midnight';
+        }
+        throw retryErr;
+      }
     }
     throw err;
   }
@@ -450,211 +510,231 @@ async function runE2E() {
   // TEST 1: Insufficient Content Enforcement (12s video vs viral_shorts 30-60s)
   // ------------------------------------------------------------------
   const t1Name = 'test1_insufficient_content';
-  reporter.startTest(t1Name, { editorialStyle: 'viral_shorts', videoId: shortVideo.id });
-  try {
-    const t1 = await analyzeStrictPaced({
-      videoId: shortVideo.id,
-      clipCount: 4,
-      editorialStyle: 'viral_shorts',
-      videoCategory: 'Tech & Creators',
-    });
-    const r1 = t1.data;
-    assert(r1.providerUsed === 'nemotron' && r1.modelUsed === 'nvidia/nemotron-3.5-super-vl:free', 'Must use strict nemotron model');
-    assert(r1.fallbackUsed === false, 'No Gemini fallback');
-    assert(r1.clips.length === 0, 'Must NOT fabricate 30-60s clips from 12s video');
-    assert(r1.hasInsufficientContent === true, 'Must flag hasInsufficientContent=true');
-    reporter.passTest(t1Name, {
-      telemetry: t1.telemetry,
-      details: {
-        clipsCount: r1.clips.length,
-        hasInsufficientContent: r1.hasInsufficientContent,
-      },
-    });
-  } catch (err) {
-    hasFatalFailure = true;
-    const reqErr = err instanceof AnalyzeRequestError ? err : null;
-    reporter.failTest(t1Name, err, {
-      telemetry: reqErr ? extractAiTelemetry(reqErr.httpStatus, reqErr.data, reqErr.elapsedMs) : null,
-    });
+  if (dailyQuotaResetAt) {
+    reporter.markSkipped(t1Name, `OpenRouter daily quota exhausted (reset=${dailyQuotaResetAt})`);
+  } else {
+    reporter.startTest(t1Name, { editorialStyle: 'viral_shorts', videoId: shortVideo.id });
+    try {
+      const t1 = await analyzeStrictPaced({
+        videoId: shortVideo.id,
+        clipCount: 4,
+        editorialStyle: 'viral_shorts',
+        videoCategory: 'Tech & Creators',
+      });
+      const r1 = t1.data;
+      assert(r1.providerUsed === 'nemotron' && r1.modelUsed === 'nvidia/nemotron-3.5-super-vl:free', 'Must use strict nemotron model');
+      assert(r1.fallbackUsed === false, 'No Gemini fallback');
+      assert(r1.clips.length === 0, 'Must NOT fabricate 30-60s clips from 12s video');
+      assert(r1.hasInsufficientContent === true, 'Must flag hasInsufficientContent=true');
+      reporter.passTest(t1Name, {
+        telemetry: t1.telemetry,
+        details: {
+          clipsCount: r1.clips.length,
+          hasInsufficientContent: r1.hasInsufficientContent,
+        },
+      });
+    } catch (err) {
+      hasFatalFailure = true;
+      const reqErr = err instanceof AnalyzeRequestError ? err : null;
+      reporter.failTest(t1Name, err, {
+        telemetry: reqErr ? extractAiTelemetry(reqErr.httpStatus, reqErr.data, reqErr.elapsedMs) : null,
+      });
+    }
   }
 
   // ------------------------------------------------------------------
   // TEST 2: Visual-Only Honest Transcript Reporting (No subtitles, silent audio)
   // ------------------------------------------------------------------
   const t2Name = 'test2_visual_only_punchy_hooks';
-  reporter.startTest(t2Name, { editorialStyle: 'punchy_hooks', videoId: visualOnlyVideo.id });
-  try {
-    const t2 = await analyzeStrictPaced({
-      videoId: visualOnlyVideo.id,
-      clipCount: 2,
-      editorialStyle: 'punchy_hooks',
-      videoCategory: 'Tech Architecture Demo',
-    });
-    const r2 = t2.data;
-    assert(r2.clips.length >= 1, 'Punchy hooks must return at least 1 valid clip on 75s 3-chapter demo video');
-    for (const c of r2.clips) {
-      assert(c.duration >= 15 && c.duration <= 30, `Punchy hook duration out of 15-30s range: ${c.duration}s`);
+  if (dailyQuotaResetAt) {
+    reporter.markSkipped(t2Name, `OpenRouter daily quota exhausted (reset=${dailyQuotaResetAt})`);
+  } else {
+    reporter.startTest(t2Name, { editorialStyle: 'punchy_hooks', videoId: visualOnlyVideo.id });
+    try {
+      const t2 = await analyzeStrictPaced({
+        videoId: visualOnlyVideo.id,
+        clipCount: 2,
+        editorialStyle: 'punchy_hooks',
+        videoCategory: 'Tech Architecture Demo',
+      });
+      const r2 = t2.data;
+      assert(r2.clips.length >= 1, 'Punchy hooks must return at least 1 valid clip on 75s 3-chapter demo video');
+      for (const c of r2.clips) {
+        assert(c.duration >= 15 && c.duration <= 30, `Punchy hook duration out of 15-30s range: ${c.duration}s`);
+      }
+      assert(r2.providerUsed === 'nemotron' && r2.modelUsed === 'nvidia/nemotron-3.5-super-vl:free' && r2.fallbackUsed === false, 'Strict nemotron model verified');
+      assert(r2.transcriptVerification?.evidenceMode === 'visual_only', 'Must honestly report visual_only');
+      assert(r2.transcriptVerification?.speechAnalysisClaimed === false, 'Must NOT claim speech analysis occurred');
+      reporter.passTest(t2Name, {
+        telemetry: t2.telemetry,
+        details: {
+          editorialPolicy: r2.editorialPolicy,
+          evidenceMode: r2.transcriptVerification?.evidenceMode,
+          speechAnalysisClaimed: r2.transcriptVerification?.speechAnalysisClaimed,
+          accepted: r2.clips.map((c: any) => ({
+            title: c.title,
+            startTime: c.startTime,
+            endTime: c.endTime,
+            duration: c.duration,
+            evidenceMode: c.evidenceMode,
+          })),
+          rejected: r2.rejectedMoments || [],
+          rejectedCount: r2.rejectedMoments?.length || 0,
+        },
+      });
+    } catch (err) {
+      hasFatalFailure = true;
+      const reqErr = err instanceof AnalyzeRequestError ? err : null;
+      reporter.failTest(t2Name, err, {
+        telemetry: reqErr ? extractAiTelemetry(reqErr.httpStatus, reqErr.data, reqErr.elapsedMs) : null,
+      });
     }
-    assert(r2.providerUsed === 'nemotron' && r2.modelUsed === 'nvidia/nemotron-3.5-super-vl:free' && r2.fallbackUsed === false, 'Strict nemotron model verified');
-    assert(r2.transcriptVerification?.evidenceMode === 'visual_only', 'Must honestly report visual_only');
-    assert(r2.transcriptVerification?.speechAnalysisClaimed === false, 'Must NOT claim speech analysis occurred');
-    reporter.passTest(t2Name, {
-      telemetry: t2.telemetry,
-      details: {
-        editorialPolicy: r2.editorialPolicy,
-        evidenceMode: r2.transcriptVerification?.evidenceMode,
-        speechAnalysisClaimed: r2.transcriptVerification?.speechAnalysisClaimed,
-        accepted: r2.clips.map((c: any) => ({
-          title: c.title,
-          startTime: c.startTime,
-          endTime: c.endTime,
-          duration: c.duration,
-          evidenceMode: c.evidenceMode,
-        })),
-        rejected: r2.rejectedMoments || [],
-        rejectedCount: r2.rejectedMoments?.length || 0,
-      },
-    });
-  } catch (err) {
-    hasFatalFailure = true;
-    const reqErr = err instanceof AnalyzeRequestError ? err : null;
-    reporter.failTest(t2Name, err, {
-      telemetry: reqErr ? extractAiTelemetry(reqErr.httpStatus, reqErr.data, reqErr.elapsedMs) : null,
-    });
   }
 
   // ------------------------------------------------------------------
   // TEST 3: Viral Shorts (30-60s) on 195s Multi-Topic Video w/ Embedded Subtitles (4 candidates)
   // ------------------------------------------------------------------
   const t3Name = 'test3_viral_shorts_combined';
-  reporter.startTest(t3Name, { editorialStyle: 'viral_shorts', videoId: keynoteVideo.id });
-  try {
-    const t3 = await analyzeStrictPaced({
-      videoId: keynoteVideo.id,
-      clipCount: 4,
-      editorialStyle: 'viral_shorts',
-      videoCategory: 'Tech, AI & Creator Economy',
-      creatorDirection: 'Extract 4 distinct self-contained chapters avoiding any color bars or blank ending frames.',
-    });
-    const r3 = t3.data;
-    for (const c of r3.clips) {
-      assert(c.duration >= 30 && c.duration <= 60, `Viral Shorts duration out of 30-60s range: ${c.duration}s`);
-      assert(c.endTime <= 186.5, `Clip overlapped SMPTE/black technical segment (${c.endTime}s)`);
-    }
-    assert(r3.providerUsed === 'nemotron' && r3.modelUsed === 'nvidia/nemotron-3.5-super-vl:free', 'Strict Nemotron verified');
-    assert(r3.fallbackUsed === false, 'Gemini NOT called');
-    assert(r3.transcriptVerification?.evidenceMode === 'combined', 'Must detect embedded subtitles -> combined');
-    assert(r3.transcriptVerification?.speechAnalysisClaimed === true, 'Speech verified');
-    assert(r3.clips.length >= 2, `Expected multiple distinct 30-60s candidates, got ${r3.clips.length}`);
+  if (dailyQuotaResetAt) {
+    reporter.markSkipped(t3Name, `OpenRouter daily quota exhausted (reset=${dailyQuotaResetAt})`);
+  } else {
+    reporter.startTest(t3Name, { editorialStyle: 'viral_shorts', videoId: keynoteVideo.id });
+    try {
+      const t3 = await analyzeStrictPaced({
+        videoId: keynoteVideo.id,
+        clipCount: 4,
+        editorialStyle: 'viral_shorts',
+        videoCategory: 'Tech, AI & Creator Economy',
+        creatorDirection: 'Extract 4 distinct self-contained chapters avoiding any color bars or blank ending frames.',
+      });
+      const r3 = t3.data;
+      for (const c of r3.clips) {
+        assert(c.duration >= 30 && c.duration <= 60, `Viral Shorts duration out of 30-60s range: ${c.duration}s`);
+        assert(c.endTime <= 186.5, `Clip overlapped SMPTE/black technical segment (${c.endTime}s)`);
+      }
+      assert(r3.providerUsed === 'nemotron' && r3.modelUsed === 'nvidia/nemotron-3.5-super-vl:free', 'Strict Nemotron verified');
+      assert(r3.fallbackUsed === false, 'Gemini NOT called');
+      assert(r3.transcriptVerification?.evidenceMode === 'combined', 'Must detect embedded subtitles -> combined');
+      assert(r3.transcriptVerification?.speechAnalysisClaimed === true, 'Speech verified');
+      assert(r3.clips.length >= 2, `Expected multiple distinct 30-60s candidates, got ${r3.clips.length}`);
 
-    viralShortsClips = r3.clips;
-    reporter.passTest(t3Name, {
-      telemetry: t3.telemetry,
-      details: {
-        editorialPolicy: r3.editorialPolicy,
-        transcriptVerification: {
-          evidenceMode: r3.transcriptVerification?.evidenceMode,
-          transcriptSource: r3.transcriptVerification?.transcriptSource,
-          speechAnalysisClaimed: r3.transcriptVerification?.speechAnalysisClaimed,
-          segmentsCount: r3.transcriptVerification?.segmentsCount,
+      viralShortsClips = r3.clips;
+      reporter.passTest(t3Name, {
+        telemetry: t3.telemetry,
+        details: {
+          editorialPolicy: r3.editorialPolicy,
+          transcriptVerification: {
+            evidenceMode: r3.transcriptVerification?.evidenceMode,
+            transcriptSource: r3.transcriptVerification?.transcriptSource,
+            speechAnalysisClaimed: r3.transcriptVerification?.speechAnalysisClaimed,
+            segmentsCount: r3.transcriptVerification?.segmentsCount,
+          },
+          accepted: r3.clips.map((c: any) => ({
+            id: c.id,
+            title: c.title,
+            startTime: c.startTime,
+            endTime: c.endTime,
+            boundaryAdjusted: Boolean(c.boundaryAdjusted),
+            duration: c.duration,
+            viralityScore: c.viralityScore,
+            evidenceMode: c.evidenceMode,
+          })),
+          rejected: r3.rejectedMoments,
         },
-        accepted: r3.clips.map((c: any) => ({
-          id: c.id,
-          title: c.title,
-          startTime: c.startTime,
-          endTime: c.endTime,
-          boundaryAdjusted: Boolean(c.boundaryAdjusted),
-          duration: c.duration,
-          viralityScore: c.viralityScore,
-          evidenceMode: c.evidenceMode,
-        })),
-        rejected: r3.rejectedMoments,
-      },
-    });
-  } catch (err) {
-    hasFatalFailure = true;
-    const reqErr = err instanceof AnalyzeRequestError ? err : null;
-    reporter.failTest(t3Name, err, {
-      telemetry: reqErr ? extractAiTelemetry(reqErr.httpStatus, reqErr.data, reqErr.elapsedMs) : null,
-    });
+      });
+    } catch (err) {
+      hasFatalFailure = true;
+      const reqErr = err instanceof AnalyzeRequestError ? err : null;
+      reporter.failTest(t3Name, err, {
+        telemetry: reqErr ? extractAiTelemetry(reqErr.httpStatus, reqErr.data, reqErr.elapsedMs) : null,
+      });
+    }
   }
 
   // ------------------------------------------------------------------
   // TEST 4A: Educational Style (20-60s)
   // ------------------------------------------------------------------
   const t4EduName = 'test4a_educational_style';
-  reporter.startTest(t4EduName, { editorialStyle: 'educational', videoId: keynoteVideo.id });
-  try {
-    const t4Edu = await analyzeStrictPaced({
-      videoId: keynoteVideo.id,
-      clipCount: 3,
-      editorialStyle: 'educational',
-      videoCategory: 'Educational & Science',
-    });
-    const r4Edu = t4Edu.data;
-    assert(r4Edu.clips.length >= 1, 'Educational style must return at least 1 valid clip on coherent 195s video');
-    for (const c of r4Edu.clips) {
-      assert(c.duration >= 20 && c.duration <= 60, `Educational duration out of 20-60s: ${c.duration}s`);
+  if (dailyQuotaResetAt) {
+    reporter.markSkipped(t4EduName, `OpenRouter daily quota exhausted (reset=${dailyQuotaResetAt})`);
+  } else {
+    reporter.startTest(t4EduName, { editorialStyle: 'educational', videoId: keynoteVideo.id });
+    try {
+      const t4Edu = await analyzeStrictPaced({
+        videoId: keynoteVideo.id,
+        clipCount: 3,
+        editorialStyle: 'educational',
+        videoCategory: 'Educational & Science',
+      });
+      const r4Edu = t4Edu.data;
+      assert(r4Edu.clips.length >= 1, 'Educational style must return at least 1 valid clip on coherent 195s video');
+      for (const c of r4Edu.clips) {
+        assert(c.duration >= 20 && c.duration <= 60, `Educational duration out of 20-60s: ${c.duration}s`);
+      }
+      assert(r4Edu.providerUsed === 'nemotron' && r4Edu.modelUsed === 'nvidia/nemotron-3.5-super-vl:free' && r4Edu.fallbackUsed === false, 'Strict nemotron educational model verified');
+      reporter.passTest(t4EduName, {
+        telemetry: t4Edu.telemetry,
+        details: {
+          editorialPolicy: r4Edu.editorialPolicy,
+          accepted: r4Edu.clips.map((c: any) => ({
+            title: c.title,
+            startTime: c.startTime,
+            endTime: c.endTime,
+            duration: c.duration,
+          })),
+          rejected: r4Edu.rejectedMoments,
+        },
+      });
+    } catch (err) {
+      hasFatalFailure = true;
+      const reqErr = err instanceof AnalyzeRequestError ? err : null;
+      reporter.failTest(t4EduName, err, {
+        telemetry: reqErr ? extractAiTelemetry(reqErr.httpStatus, reqErr.data, reqErr.elapsedMs) : null,
+      });
     }
-    assert(r4Edu.providerUsed === 'nemotron' && r4Edu.modelUsed === 'nvidia/nemotron-3.5-super-vl:free' && r4Edu.fallbackUsed === false, 'Strict nemotron educational model verified');
-    reporter.passTest(t4EduName, {
-      telemetry: t4Edu.telemetry,
-      details: {
-        editorialPolicy: r4Edu.editorialPolicy,
-        accepted: r4Edu.clips.map((c: any) => ({
-          title: c.title,
-          startTime: c.startTime,
-          endTime: c.endTime,
-          duration: c.duration,
-        })),
-        rejected: r4Edu.rejectedMoments,
-      },
-    });
-  } catch (err) {
-    hasFatalFailure = true;
-    const reqErr = err instanceof AnalyzeRequestError ? err : null;
-    reporter.failTest(t4EduName, err, {
-      telemetry: reqErr ? extractAiTelemetry(reqErr.httpStatus, reqErr.data, reqErr.elapsedMs) : null,
-    });
   }
 
   // ------------------------------------------------------------------
   // TEST 4B: Storytelling Style (25-60s)
   // ------------------------------------------------------------------
   const t4StoryName = 'test4b_storytelling_style';
-  reporter.startTest(t4StoryName, { editorialStyle: 'storytelling', videoId: keynoteVideo.id });
-  try {
-    const t4Story = await analyzeStrictPaced({
-      videoId: keynoteVideo.id,
-      clipCount: 3,
-      editorialStyle: 'storytelling',
-      videoCategory: 'Creator Storytelling',
-    });
-    const r4Story = t4Story.data;
-    assert(r4Story.clips.length >= 1, 'Storytelling must return at least 1 valid clip on coherent 195s video');
-    for (const c of r4Story.clips) {
-      assert(c.duration >= 25 && c.duration <= 60, `Storytelling duration out of 25-60s: ${c.duration}s`);
+  if (dailyQuotaResetAt) {
+    reporter.markSkipped(t4StoryName, `OpenRouter daily quota exhausted (reset=${dailyQuotaResetAt})`);
+  } else {
+    reporter.startTest(t4StoryName, { editorialStyle: 'storytelling', videoId: keynoteVideo.id });
+    try {
+      const t4Story = await analyzeStrictPaced({
+        videoId: keynoteVideo.id,
+        clipCount: 3,
+        editorialStyle: 'storytelling',
+        videoCategory: 'Creator Storytelling',
+      });
+      const r4Story = t4Story.data;
+      assert(r4Story.clips.length >= 1, 'Storytelling must return at least 1 valid clip on coherent 195s video');
+      for (const c of r4Story.clips) {
+        assert(c.duration >= 25 && c.duration <= 60, `Storytelling duration out of 25-60s: ${c.duration}s`);
+      }
+      assert(r4Story.providerUsed === 'nemotron' && r4Story.modelUsed === 'nvidia/nemotron-3.5-super-vl:free' && r4Story.fallbackUsed === false, 'Strict nemotron storytelling model verified');
+      reporter.passTest(t4StoryName, {
+        telemetry: t4Story.telemetry,
+        details: {
+          editorialPolicy: r4Story.editorialPolicy,
+          accepted: r4Story.clips.map((c: any) => ({
+            title: c.title,
+            startTime: c.startTime,
+            endTime: c.endTime,
+            duration: c.duration,
+          })),
+          rejected: r4Story.rejectedMoments,
+        },
+      });
+    } catch (err) {
+      hasFatalFailure = true;
+      const reqErr = err instanceof AnalyzeRequestError ? err : null;
+      reporter.failTest(t4StoryName, err, {
+        telemetry: reqErr ? extractAiTelemetry(reqErr.httpStatus, reqErr.data, reqErr.elapsedMs) : null,
+      });
     }
-    assert(r4Story.providerUsed === 'nemotron' && r4Story.modelUsed === 'nvidia/nemotron-3.5-super-vl:free' && r4Story.fallbackUsed === false, 'Strict nemotron storytelling model verified');
-    reporter.passTest(t4StoryName, {
-      telemetry: t4Story.telemetry,
-      details: {
-        editorialPolicy: r4Story.editorialPolicy,
-        accepted: r4Story.clips.map((c: any) => ({
-          title: c.title,
-          startTime: c.startTime,
-          endTime: c.endTime,
-          duration: c.duration,
-        })),
-        rejected: r4Story.rejectedMoments,
-      },
-    });
-  } catch (err) {
-    hasFatalFailure = true;
-    const reqErr = err instanceof AnalyzeRequestError ? err : null;
-    reporter.failTest(t4StoryName, err, {
-      telemetry: reqErr ? extractAiTelemetry(reqErr.httpStatus, reqErr.data, reqErr.elapsedMs) : null,
-    });
   }
 
   // ------------------------------------------------------------------
@@ -663,53 +743,57 @@ async function runE2E() {
   const t4DirName = 'test4c_creator_direction';
   const targetedDirection =
     'Focus ONLY on Topic 3 about HTTP 206 byte-range streaming and instant timeline scrubbing (around 77s-114s). Return 1 clip specifically covering HTTP 206 streaming.';
-  reporter.startTest(t4DirName, {
-    editorialStyle: 'educational',
-    videoId: keynoteVideo.id,
-    creatorDirection: targetedDirection,
-  });
-  try {
-    const t4Dir = await analyzeStrictPaced({
-      videoId: keynoteVideo.id,
-      clipCount: 1,
+  if (dailyQuotaResetAt) {
+    reporter.markSkipped(t4DirName, `OpenRouter daily quota exhausted (reset=${dailyQuotaResetAt})`);
+  } else {
+    reporter.startTest(t4DirName, {
       editorialStyle: 'educational',
-      videoCategory: 'Video Infrastructure',
+      videoId: keynoteVideo.id,
       creatorDirection: targetedDirection,
     });
-    const r4Dir = t4Dir.data;
-    assert(r4Dir.providerUsed === 'nemotron' && r4Dir.modelUsed === 'nvidia/nemotron-3.5-super-vl:free' && r4Dir.fallbackUsed === false, 'Strict nemotron creator direction model verified');
-    assert(r4Dir.creatorDirectionUsed === targetedDirection, 'Server must echo exact creatorDirectionUsed');
-    assert(r4Dir.clips.length >= 1, 'Creator direction test must return at least 1 clip');
-    const c0 = r4Dir.clips[0];
-    assert(c0.duration >= 20 && c0.duration <= 60, `Creator direction clip duration out of 20-60s: ${c0.duration}s`);
-    const clipText = `${c0.title} ${c0.hook} ${c0.description} ${c0.transcriptSegment || ''}`.toLowerCase();
-    const overlapsTopic3 = c0.endTime >= 76 && c0.startTime <= 116;
-    const mentionsTopic3 =
-      clipText.includes('206') || clipText.includes('stream') || clipText.includes('scrub') || clipText.includes('buffer');
-    assert(
-      overlapsTopic3 && mentionsTopic3,
-      `Creator direction did not steer selection to Topic 3 (got [${c0.startTime}s-${c0.endTime}s] "${c0.title}")`
-    );
+    try {
+      const t4Dir = await analyzeStrictPaced({
+        videoId: keynoteVideo.id,
+        clipCount: 1,
+        editorialStyle: 'educational',
+        videoCategory: 'Video Infrastructure',
+        creatorDirection: targetedDirection,
+      });
+      const r4Dir = t4Dir.data;
+      assert(r4Dir.providerUsed === 'nemotron' && r4Dir.modelUsed === 'nvidia/nemotron-3.5-super-vl:free' && r4Dir.fallbackUsed === false, 'Strict nemotron creator direction model verified');
+      assert(r4Dir.creatorDirectionUsed === targetedDirection, 'Server must echo exact creatorDirectionUsed');
+      assert(r4Dir.clips.length >= 1, 'Creator direction test must return at least 1 clip');
+      const c0 = r4Dir.clips[0];
+      assert(c0.duration >= 20 && c0.duration <= 60, `Creator direction clip duration out of 20-60s: ${c0.duration}s`);
+      const clipText = `${c0.title} ${c0.hook} ${c0.description} ${c0.transcriptSegment || ''}`.toLowerCase();
+      const overlapsTopic3 = c0.endTime >= 76 && c0.startTime <= 116;
+      const mentionsTopic3 =
+        clipText.includes('206') || clipText.includes('stream') || clipText.includes('scrub') || clipText.includes('buffer');
+      assert(
+        overlapsTopic3 && mentionsTopic3,
+        `Creator direction did not steer selection to Topic 3 (got [${c0.startTime}s-${c0.endTime}s] "${c0.title}")`
+      );
 
-    reporter.passTest(t4DirName, {
-      telemetry: t4Dir.telemetry,
-      details: {
-        creatorDirectionUsed: r4Dir.creatorDirectionUsed,
-        accepted: r4Dir.clips.map((c: any) => ({
-          title: c.title,
-          startTime: c.startTime,
-          endTime: c.endTime,
-          duration: c.duration,
-        })),
-        rejected: r4Dir.rejectedMoments,
-      },
-    });
-  } catch (err) {
-    hasFatalFailure = true;
-    const reqErr = err instanceof AnalyzeRequestError ? err : null;
-    reporter.failTest(t4DirName, err, {
-      telemetry: reqErr ? extractAiTelemetry(reqErr.httpStatus, reqErr.data, reqErr.elapsedMs) : null,
-    });
+      reporter.passTest(t4DirName, {
+        telemetry: t4Dir.telemetry,
+        details: {
+          creatorDirectionUsed: r4Dir.creatorDirectionUsed,
+          accepted: r4Dir.clips.map((c: any) => ({
+            title: c.title,
+            startTime: c.startTime,
+            endTime: c.endTime,
+            duration: c.duration,
+          })),
+          rejected: r4Dir.rejectedMoments,
+        },
+      });
+    } catch (err) {
+      hasFatalFailure = true;
+      const reqErr = err instanceof AnalyzeRequestError ? err : null;
+      reporter.failTest(t4DirName, err, {
+        telemetry: reqErr ? extractAiTelemetry(reqErr.httpStatus, reqErr.data, reqErr.elapsedMs) : null,
+      });
+    }
   }
 
   // ------------------------------------------------------------------
@@ -725,14 +809,17 @@ async function runE2E() {
     const selectedClips = viralShortsClips.slice(0, 4);
     reporter.startTest(t5Name, { clipCount: selectedClips.length });
     try {
+      const token = await authenticateOwner();
       const previewResults: any[] = [];
       for (const c of selectedClips) {
-        const thumbRes = await fetch(`${API_BASE}/api/thumbnails/clip/${keynoteVideo.id}?t=${Math.round(c.startTime)}`);
+        const thumbRes = await fetch(`${API_BASE}/api/thumbnails/clip/${keynoteVideo.id}?t=${Math.round(c.startTime)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         const thumbBuf = Buffer.from(await thumbRes.arrayBuffer());
         assert(thumbRes.status === 200 && thumbBuf.length > 1000, `Thumbnail failed for ${c.id}`);
 
         const streamRes = await fetch(`${API_BASE}/api/videos/stream/${keynoteVideo.id}`, {
-          headers: { Range: 'bytes=0-65535' },
+          headers: { Range: 'bytes=0-65535', Authorization: `Bearer ${token}` },
         });
         assert(streamRes.status === 206, `Stream 206 range check failed for ${c.id}`);
         previewResults.push({
@@ -746,7 +833,11 @@ async function runE2E() {
 
       const batchRes = await fetch(`${API_BASE}/api/clips/batch-render`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Connection: 'close' },
+        headers: {
+          'Content-Type': 'application/json',
+          Connection: 'close',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           clips: selectedClips.map((c: any) => ({
             clipId: c.id,
@@ -766,7 +857,9 @@ async function runE2E() {
       for (const job of batchData.jobs) {
         let current = job;
         for (let attempt = 0; attempt < 90; attempt++) {
-          const stRes = await fetch(`${API_BASE}/api/clips/status/${job.id}`);
+          const stRes = await fetch(`${API_BASE}/api/clips/status/${job.id}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
           const stData = await stRes.json();
           current = stData.job;
           if (current.status === 'completed' || current.status === 'failed') break;
@@ -774,7 +867,9 @@ async function runE2E() {
         }
         assert(current.status === 'completed', `Render job ${job.id} did not complete: ${current.status} (${current.error})`);
 
-        const dlRes = await fetch(`${API_BASE}/api/clips/download/${job.id}`);
+        const dlRes = await fetch(`${API_BASE}/api/clips/download/${job.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         assert(dlRes.status === 200, `Download failed for ${job.id}`);
         const mp4Buf = Buffer.from(await dlRes.arrayBuffer());
         assert(mp4Buf.length > 5000, `Rendered MP4 too small (${mp4Buf.length} bytes)`);

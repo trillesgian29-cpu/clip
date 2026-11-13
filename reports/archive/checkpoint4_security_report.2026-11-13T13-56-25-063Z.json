@@ -1,0 +1,29 @@
+{
+  "reportVersion": "2.0",
+  "runId": "run-1794578104401-2646",
+  "runStatus": "running",
+  "startedAt": "2026-11-13T13:55:04.399Z",
+  "updatedAt": "2026-11-13T13:55:04.826Z",
+  "completedAt": null,
+  "archivedPreviousReportPath": "/app/applet/reports/archive/checkpoint4_security_report.2026-11-13T13-55-04-404Z.json",
+  "interruptedReason": null,
+  "metadata": {},
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "incomplete": 0,
+    "skipped": 0
+  },
+  "tests": {
+    "cp_final_security_auth_gates": {
+      "name": "cp_final_security_auth_gates",
+      "status": "failed",
+      "startedAt": "2026-11-13T13:55:04.410Z",
+      "completedAt": "2026-11-13T13:55:04.823Z",
+      "elapsedMs": 413,
+      "error": "ASSERTION FAILED: Owner login failed (401): {\"error\":\"Invalid owner passcode\"}",
+      "telemetry": null
+    }
+  }
+}

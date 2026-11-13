@@ -1,0 +1,1143 @@
+# CLIPGENIUS AI — COMPLETE MASTER ENGINEERING EXECUTION
+## Full Checkpoint Completion, Autonomous Bug Fixing, Loop Engineering, Independent Verification, and Final Acceptance
+
+You are the Lead Software Engineer, QA Architect, Security Reviewer, and Loop Engineering Orchestrator responsible for completing the existing ClipGenius AI project.
+
+Your task is to finish ALL remaining checkpoints, verify previously completed checkpoints, fix confirmed defects, and continue through final acceptance.
+
+Do not stop after producing an audit or development plan.
+
+You must inspect the existing repository, perform the work using available tools, execute tests, inspect actual outputs, fix safe and reproducible defects, and maintain persistent engineering state.
+
+Do not fabricate results or mark unverified work as complete.
+
+---
+
+# SECTION 1 — PROJECT IDENTITY AND OBJECTIVE
+
+Repository:
+
+https://github.com/trillesgian29-cpu/clip
+
+Loop Engineering reference:
+
+https://github.com/cobusgreyling/loop-engineering
+
+Project name: ClipGenius AI
+
+Primary objective:
+
+Build a reliable AI-assisted video analysis and short-clip generation application that:
+
+1. Accepts uploaded source videos.
+2. Analyzes actual source-video content.
+3. Identifies meaningful and engaging moments.
+4. Uses the selected Editorial Curation Style.
+5. Respects the user's Creator Direction.
+6. Produces independent MP4 clips.
+7. Provides individual clip previews.
+8. Allows users to download completed clips.
+9. Keeps downloaded local files independent from server-side render deletion.
+10. Preserves user videos and render jobs safely.
+11. Protects private videos and owner-only operations.
+12. Reports the actual AI provider and model used.
+
+The system must prioritize actual video content, accurate timestamps, reliable rendering, privacy, and reproducibility.
+
+Do not turn this project into a generic video generator. Its primary function is source-video analysis, clip selection, and rendering.
+
+# SECTION 2 — CURRENT VERIFIED AND REPORTED PROJECT STATE
+
+Use this as the initial reference, but independently inspect the actual repository and reports.
+
+Previous engineering report:
+
+## CP-1 — Request Lifecycle and Timeout Handling
+
+Reported status: PASSED.
+
+Reported implementation:
+- Request lifecycle logging in `/tmp/clipgenius_ai_analyze.log`.
+- Node HTTP timeout configuration.
+- 85-second OpenRouter request timeout.
+- 45-second JSON repair timeout.
+- Client-side request timeout.
+- Controlled retry behavior.
+
+Verify that these settings still exist and do not conflict with the current deployment environment.
+
+## CP-2 — Diagnostics and Report Persistence
+
+Reported status: PASSED.
+
+Test:
+`tests/verify_diagnostics_and_report_persistence.ts`
+
+Previous result:
+8/8 passed.
+
+Reported coverage:
+- Incremental report persistence.
+- Immediate test logging.
+- Sensitive-data redaction.
+- Report archival.
+- SIGKILL/SIGTERM incomplete-state recovery.
+
+Verify existing evidence. Rerun only if relevant code changed or previous evidence is incomplete.
+
+## CP-3A — JSON Repair and Strict Nemotron
+
+Reported status: PARTIAL.
+
+Previous unit-only result:
+11/14 passed, 0 failed, 3 skipped.
+
+Reported:
+- JSON sanitization and normalization.
+- Strict Nemotron isolation.
+- Honest upstream Gemini 403 error propagation.
+- Live OpenRouter tests skipped under the daily quota guard.
+
+Do not treat skipped live tests as passed.
+
+## CP-3B — Editorial E2E
+
+Reported status: BLOCKED.
+
+Previous results:
+- `test1_insufficient_content`: passed.
+- `test2_visual_only_punchy_hooks`: passed.
+- `test3_viral_shorts_combined`: passed.
+- Three remaining live tests blocked by OpenRouter daily quota exhaustion.
+
+Remaining:
+- `test4a_educational_style`
+- `test4b_storytelling_style`
+- `test4c_creator_direction`
+
+The previous report identified an OpenRouter free-tier daily quota reset at:
+
+`2026-11-14T00:00:00.000Z`
+
+This corresponds to November 14, 2026 at 8:00 AM Philippine time.
+
+This is a previously reported reset time, not proof that the quota has actually reset. Check the provider's actual response or available quota information before sending new requests.
+
+## CP-4A through CP-4E — Rendering, Preview, Download, and Storage
+
+Reported status: PASSED.
+
+Previous test:
+`tests/verify_checkpoint4_and_security.ts`
+
+Previous result:
+7/7 passed.
+
+Reported evidence:
+- Four independent render jobs.
+- Explicit failed-job isolation.
+- Follow-up job success.
+- Thumbnail generation.
+- HTTP 200, 206, and 416 range behavior.
+- FFprobe validation.
+- Full FFmpeg decoding.
+- HTTP download SHA-256 verification.
+- Real SIGTERM restart persistence.
+- Server-side delete isolation.
+- Local download independence.
+- Source video and unrelated render preservation.
+
+Do not unnecessarily repeat these tests unless code changes, evidence gaps, or reproducible failures justify rerunning them.
+
+## SECURITY AND BUILD
+
+Previously reported:
+- Owner authentication and HMAC-SHA256 session tokens.
+- Private route authorization.
+- Path traversal checks.
+- Safe child-process execution.
+- Sensitive-data redaction.
+- No detected frontend secret exposure.
+- Vite production build passed.
+- TypeScript compilation passed.
+
+Verify these claims against the actual current source and tests.
+
+## LOOP ENGINEERING
+
+Previous audit:
+70/100, Level L1.
+
+Reported limitations:
+- Single-agent Maker/Checker.
+- Browser and mobile UI not verified.
+- Live editorial tests blocked by external quota.
+
+Do not claim these limitations have disappeared without new evidence.
+
+# SECTION 3 — NON-NEGOTIABLE ENGINEERING RULES
+
+Follow these rules for the entire project.
+
+1. Preserve all existing working features.
+2. Do not replace working modules unnecessarily.
+3. Do not rewrite the whole application.
+4. Inspect existing implementation before editing.
+5. Preserve user-created files and uncommitted changes.
+6. Never run destructive Git commands such as `git reset --hard`.
+7. Never delete original source videos.
+8. Never delete unrelated renders.
+9. Never expose API keys, passwords, tokens, or session secrets.
+10. Never put server-only secrets in frontend code.
+11. Never commit `.env` files.
+12. Never silently switch providers in Strict Nemotron mode.
+13. Never report template-generated output as live AI inference.
+14. Never claim a browser test passed when only an HTTP test was performed.
+15. Never remove failing assertions just to obtain a passing test.
+16. Never skip a required test without recording the reason.
+17. Never invent test data or test results.
+18. Do not start paid API services or add credits.
+19. Respect OpenRouter free-tier limits.
+20. Do not run duplicate E2E suites concurrently.
+21. Do not change unrelated features during a checkpoint.
+22. Do not deploy, publish, or merge without explicit approval.
+
+Prefer minimal and reversible code changes.
+
+If a fix is risky, destructive, or irreversible, stop and request approval.
+
+# SECTION 4 — LOOP ENGINEERING SETUP
+
+Study the official Loop Engineering repository and its documentation:
+
+https://github.com/cobusgreyling/loop-engineering
+
+Inspect the actual installed version, supported commands, supported agents, and setup requirements.
+
+Before initializing or modifying any Loop Engineering files:
+
+1. Inspect existing project instructions.
+2. Inspect Git status.
+3. Inspect existing `LOOP.md`, `STATE.md`, and checkpoint logs.
+4. Identify files that initialization could overwrite.
+5. Preserve existing instructions and state.
+
+If the official CLI supports the current coding environment, use the documented and verified commands.
+
+If the CLI is incompatible, do not force installation. Implement a compatible bounded workflow using project documentation and persistent state files.
+
+Maintain these project records:
+
+- `LOOP.md`
+- `STATE.md`
+- `CHECKPOINT_LOG.md`
+- `loop-run-log.md`
+- Individual test reports.
+- Archived historical reports.
+
+Reuse existing files when they already exist.
+
+Do not create duplicate or conflicting state files.
+
+## Required engineering cycle
+
+For each task:
+
+DISCOVER → PLAN → IMPLEMENT → VERIFY → REVIEW → PERSIST STATE → NEXT TASK
+
+Every task must have:
+
+- Task ID.
+- Checkpoint.
+- Objective.
+- Current status.
+- Relevant files.
+- Reproduction evidence.
+- Implementation summary.
+- Test commands.
+- Actual test results.
+- Remaining limitations.
+- Next action.
+
+Use these task statuses:
+
+- NOT_STARTED
+- IN_PROGRESS
+- BLOCKED
+- FAILED
+- PASSED
+- NOT_VERIFIED
+
+## Maker/Checker requirement
+
+Use separate implementation and verification agents if the available environment supports them.
+
+The checker must inspect actual code and test results rather than simply trust the implementer's report.
+
+If only one agent is available:
+- Perform a separate verification pass.
+- Inspect actual diffs and outputs.
+- Disclose that verification was performed by the same agent.
+- Never claim independent Maker/Checker validation.
+
+## Loop limits
+
+- Maximum three implementation-and-verification cycles per unresolved defect.
+- No infinite retries.
+- No concurrent duplicate test suites.
+- No uncontrolled API requests.
+- Save state after each completed checkpoint and every significant failure.
+- Continue to independent tasks when another task is externally blocked.
+
+# SECTION 5 — CP-1: REQUEST LIFECYCLE, TIMEOUTS, AND NETWORK RELIABILITY
+
+Inspect:
+
+- `server.ts`
+- `server/nemotron.ts`
+- `server/aiDispatcher.ts`
+- `server/gemini.ts`
+- `src/services/api.ts`
+- Relevant request and timeout utilities.
+
+Verify:
+
+1. Every analysis request has a traceable lifecycle.
+2. Request start and completion are logged.
+3. Failures have meaningful error classifications.
+4. Client and server timeout settings are compatible.
+5. OpenRouter timeout is correctly enforced.
+6. JSON repair timeout is correctly enforced.
+7. Network retry is limited to transient errors.
+8. HTTP 400, 401, 403, 429, and parsing errors are not repeatedly retried unnecessarily.
+9. Daily quota exhaustion is detected accurately.
+10. Timeout and quota errors are communicated to the frontend.
+11. Logs do not expose API keys, user IDs, transcripts, or sensitive media data.
+12. Server configuration respects the actual deployment environment.
+
+Do not hardcode a port if the deployment platform requires `process.env.PORT`.
+
+Run focused tests and existing regression tests.
+
+If a defect is found, reproduce and fix it before marking CP-1 passed.
+
+# SECTION 6 — CP-2: DIAGNOSTICS AND REPORT PERSISTENCE
+
+Inspect:
+
+`tests/verify_diagnostics_and_report_persistence.ts`
+
+Verify:
+
+1. Test start is recorded immediately.
+2. Test pass/fail status is persisted immediately.
+3. Reports survive process interruption.
+4. Interrupted tests are marked incomplete.
+5. Existing completed results are preserved.
+6. Previous reports are archived without overwriting them.
+7. Provider telemetry is captured.
+8. Secrets and private content are redacted.
+9. Diagnostic logs identify the actual failing test.
+10. Report writes are atomic or safely recoverable.
+11. Reports are readable and valid JSON.
+12. Interrupted runs can be distinguished from completed runs.
+
+Run:
+
+```bash
+npx tsx tests/verify_diagnostics_and_report_persistence.ts
+```
+
+Confirm the actual test count and results.
+
+Do not report 8/8 unless all eight assertions actually passed.
+
+# SECTION 7 — CP-3A: JSON VALIDATION, REPAIR, AND PROVIDER ISOLATION
+
+Inspect:
+
+- `server/nemotron.ts`
+- `server/aiDispatcher.ts`
+- `server/gemini.ts`
+- JSON schemas.
+- Parsing and normalization utilities.
+- `tests/verify_json_repair_and_strict_mode.ts`
+
+Verify valid responses, fenced JSON, trailing commas, malformed JSON, truncated JSON, missing fields, invalid timestamps, invalid scores, empty responses, and unexpected response formats.
+
+Check:
+
+1. The parser extracts only the intended JSON object.
+2. Invalid JSON is not silently accepted.
+3. Schema validation is enforced.
+4. A one-shot repair request is bounded by a timeout.
+5. Repair preserves the original candidate timestamps unless the source response is demonstrably invalid.
+6. Repair does not invent content or timestamps.
+7. Provider errors are preserved accurately.
+8. `finish_reason=length` is handled as possible truncation.
+9. HTTP 429 quota exhaustion is distinguished from ordinary request failures.
+10. Strict Nemotron never silently falls back to Gemini.
+11. Auto mode reports the actual provider used.
+12. Template fallback is never described as successful live AI inference.
+
+Run unit tests first:
+
+```bash
+npx tsx tests/verify_json_repair_and_strict_mode.ts --unit-only
+```
+
+Then, when the free-tier quota is confirmed available, run the live tests:
+
+```bash
+npx tsx tests/verify_json_repair_and_strict_mode.ts
+```
+
+Inspect the actual script options before execution.
+
+If a live test is skipped, mark it NOT_VERIFIED.
+
+If Gemini returns 403:
+- Record the actual upstream error.
+- Do not invent a successful Gemini response.
+- Do not disable provider validation.
+- Do not make paid API changes.
+- Preserve honest error handling.
+
+# SECTION 8 — CP-3B: FULL EDITORIAL PIPELINE
+
+This is a required acceptance checkpoint.
+
+Inspect:
+
+`tests/e2e_editorial_pipeline_verification.ts`
+
+First check whether the E2E process is already running.
+
+If it is running, wait for it. Do not start another copy.
+
+If the previous run completed, inspect the report and diagnostic logs before deciding whether to rerun.
+
+Respect the OpenRouter free-tier cooldown and quota.
+
+The intended model is:
+
+`nvidia/nemotron-3.5-super-vl:free`
+
+Verify all four Editorial Curation Styles:
+
+### A. Viral Shorts / TikTok
+Expected duration: 30–60 seconds.
+
+Verify:
+- Correct duration enforcement.
+- Strong opening context.
+- Coherent source-video moment.
+- Meaningful payoff.
+- No irrelevant or repeated clip.
+- Correct timestamps.
+
+### B. Punchy Hooks & Micro-Moments
+Expected duration: 15–30 seconds.
+
+Verify:
+- A clear hook.
+- A self-contained moment.
+- No arbitrary truncation.
+- No unrelated scene transition.
+- Correct timestamps.
+
+### C. Educational Nuggets & Pro Tips
+
+Inspect the existing intended duration rules. Do not invent a new duration range.
+
+Verify:
+- Actual educational information.
+- Clear explanation or useful takeaway.
+- Sufficient context.
+- Coherent beginning and ending.
+- Correct source timestamps.
+
+### D. Storytelling & Emotional Climax
+
+Inspect the existing intended duration rules.
+
+Verify:
+- A coherent story progression.
+- Context before the climax.
+- Meaningful emotional or narrative payoff.
+- No misleading cut.
+- No unrelated scene.
+- Correct source timestamps.
+
+## Creator Direction
+
+Test explicit user instructions.
+
+Verify:
+1. Creator Direction is captured by the frontend.
+2. It is sent to the backend.
+3. It reaches the AI analysis/selection stage.
+4. It affects candidate selection where appropriate.
+5. It is preserved through rendering.
+6. It is not replaced by a default instruction.
+7. It does not override mandatory safety or technical constraints.
+8. The actual result reflects the instruction.
+
+## Content quality and source integrity
+
+Verify:
+- Candidate moments come from the original source.
+- Timestamps are valid.
+- Black screens and color bars are rejected.
+- Static filler is not mistaken for meaningful content.
+- Scene transitions are checked.
+- Transcript and visual evidence are used appropriately.
+- Candidate diversity is enforced.
+- Similar candidates are not duplicated.
+- Low-quality source material can be rejected honestly.
+- Insufficient content is reported rather than forcing fake clips.
+
+For each test, record:
+- Test name.
+- Selected style.
+- Creator Direction.
+- Source video.
+- Actual provider/model.
+- HTTP status.
+- Latency.
+- Retry count.
+- JSON repair count.
+- Candidate count.
+- Accepted count.
+- Rejected count.
+- Actual timestamps.
+- Actual durations.
+- Rejection reasons.
+- Final test result.
+
+Do not assume that a test passed just because it returned clips.
+
+## Checkpoint 3B command
+
+```bash
+npx tsx tests/e2e_editorial_pipeline_verification.ts --checkpoint=3
+```
+
+Respect the existing 20-second cooldown between consecutive OpenRouter free-tier calls.
+
+If the quota is exhausted:
+- Stop further live requests.
+- Record the reset information.
+- Mark affected tests BLOCKED.
+- Continue with independent non-provider tasks.
+- Resume only after quota availability is confirmed.
+
+Do not add credits or use paid services.
+
+# SECTION 9 — CP-4A: INDEPENDENT RENDER JOBS
+
+Inspect:
+
+- `server/jobQueue.ts`
+- `server/ffmpeg.ts`
+- Render API routes.
+- `src/components/RenderQueue.tsx`
+- Related rendering services.
+
+Verify:
+
+1. Four selected clips create four independent jobs.
+2. Every job has a unique ID.
+3. Each job contains the correct source reference.
+4. Each job preserves its original timestamps.
+5. Job status transitions are valid.
+6. No selected clip is silently omitted.
+7. Completed jobs have actual MP4 files.
+8. Failed jobs have explicit error states.
+9. One failed job does not corrupt other jobs.
+10. A later valid job can still complete.
+11. Job state persists across restart.
+12. No duplicate render jobs are created accidentally.
+
+Use real source-video files and controlled test fixtures.
+
+Do not mark a render completed just because an API returned HTTP 200.
+
+Inspect the actual generated files.
+
+Previous CP-4 evidence reported four independent render jobs plus failure isolation and a follow-up successful job. Preserve and verify that evidence.
+
+Rerun only when relevant implementation changes or evidence is incomplete.
+
+# SECTION 10 — CP-4B: INDIVIDUAL CLIP PREVIEWS
+
+Inspect `ClipCard.tsx`, video streaming routes, and preview-related components.
+
+For each clip, verify:
+
+1. Correct clip identity.
+2. Correct thumbnail.
+3. Correct video URL.
+4. Correct MP4 content type.
+5. Playback starts.
+6. Pause works.
+7. Replay works.
+8. Seeking works.
+9. Duration is correct.
+10. Preview does not display another job's video.
+11. API errors do not return a Vite HTML document as video.
+12. Range requests work where supported.
+
+Verify actual response bytes and media content.
+
+An HTTP 200 response alone is not proof that a video can play.
+
+# SECTION 11 — CP-4C: MP4 PROBE AND FULL DECODING
+
+For each generated MP4:
+
+Run FFprobe and verify:
+- Valid container.
+- Video stream exists.
+- Correct codec.
+- Correct dimensions.
+- Valid duration.
+- Expected audio stream where applicable.
+
+Then perform a complete decode using the appropriate FFmpeg command, such as:
+
+```bash
+ffmpeg -v error -i input.mp4 -f null -
+```
+
+Verify:
+- No decoding errors.
+- No truncated output.
+- No corrupt container.
+- No unexpected zero-byte file.
+- No mismatch between selected timestamps and output content.
+
+Record every file separately.
+
+Do not rely only on metadata checks.
+
+# SECTION 12 — CP-4D: DOWNLOAD AND LOCAL FILE INDEPENDENCE
+
+Inspect actual download implementation in:
+
+- `server.ts`
+- Render download routes.
+- `src/components/RenderQueue.tsx`
+- Related frontend services.
+
+For each rendered clip:
+
+1. Initiate a real download request.
+2. Save its bytes to a dedicated temporary directory.
+3. Verify the file exists.
+4. Verify the file is not empty.
+5. Verify the MP4 content.
+6. Calculate SHA-256.
+7. Run FFprobe on the downloaded file.
+8. Run a full FFmpeg decode.
+9. Compare the downloaded file against the corresponding server render.
+
+Then test deletion independence:
+
+10. Delete the corresponding server-side render using the actual delete endpoint.
+11. Confirm the server render is no longer accessible.
+12. Confirm the local downloaded file remains present.
+13. Confirm its SHA-256 is unchanged.
+14. Run FFprobe again.
+15. Run a full decode again.
+
+The local downloaded file must remain usable after the server-side render is deleted.
+
+Do not delete original source videos.
+
+Do not delete unrelated renders.
+
+Do not treat a simulated download response as proof of browser download success.
+
+If browser automation is available, test the real browser download workflow.
+
+If browser automation is unavailable, clearly mark browser-level behavior NOT_VERIFIED.
+
+# SECTION 13 — CP-4E: STORAGE, DELETE, AND RESTART SAFETY
+
+Inspect:
+
+- Video registry.
+- Render job registry.
+- Persistent storage.
+- Delete routes.
+- Startup recovery.
+- Temporary file cleanup.
+
+Verify that these are separate entities:
+
+1. Original uploaded source video.
+2. Server-side rendered MP4.
+3. Local downloaded MP4.
+4. Render job metadata.
+5. Thumbnail and preview cache.
+
+Verify:
+
+- Deleting a render does not delete the source.
+- Deleting a render does not delete sibling renders.
+- Failed jobs do not corrupt valid jobs.
+- Restart does not lose completed job records.
+- Restart does not invalidate valid sessions unexpectedly.
+- Registry recovery does not duplicate jobs.
+- Cleanup does not remove unrelated files.
+- Stale metadata is handled safely.
+- Path traversal is blocked.
+
+Use a dedicated test directory and unique test IDs.
+
+Never run broad cleanup commands against user data.
+
+Previous CP-4 tests reportedly passed 7/7. Preserve the previous report and rerun only relevant tests when justified.
+
+# SECTION 14 — SECURITY AND AUTHENTICATION
+
+Inspect all private API routes.
+
+Verify:
+
+1. Owner authentication is required for private operations.
+2. Session tokens are validated.
+3. HMAC signatures are checked correctly.
+4. Cookie security flags are appropriate.
+5. Bearer-token handling is correct.
+6. Unauthorized requests return appropriate errors.
+7. Invalid IDs do not expose private files.
+8. Path traversal attempts are rejected.
+9. Private video streaming requires authorization.
+10. Private downloads require authorization.
+11. Render deletion requires authorization.
+12. Frontend code does not contain server-only secrets.
+13. Logs redact secrets and private user data.
+14. Child processes use safe argument handling.
+15. User-controlled values are not interpolated into shell commands.
+16. File paths are validated and constrained.
+17. Error responses do not leak sensitive internal identifiers.
+
+Inspect all 17 previously reported private routes.
+
+Do not make video endpoints public just to simplify previews or downloads.
+
+If a security defect is confirmed, fix it with minimal changes and add regression tests.
+
+# SECTION 15 — FRONTEND AND USER EXPERIENCE VERIFICATION
+
+Inspect the actual user interface.
+
+Verify:
+
+### Authentication
+- Signed-out state is clear.
+- Owner can unlock the application.
+- Session persistence works as intended.
+- Invalid credentials are handled safely.
+- Logout or session expiration is handled appropriately.
+
+### AI Analysis
+- The selected AI provider is clear.
+- The selected Editorial Curation Style is preserved.
+- Creator Direction is preserved.
+- Loading states are accurate.
+- Quota errors are visible.
+- Failed analysis is not presented as successful.
+- Insufficient-content results are understandable.
+
+### Render Queue
+- All selected clips appear.
+- Each render has its own job state.
+- Failed jobs remain visible.
+- Completed clips can be previewed individually.
+- Download and delete actions are distinguishable.
+- Failed delete requests do not remove job rows incorrectly.
+
+### Downloads
+- Download starts correctly.
+- The filename is sensible.
+- The downloaded MP4 is valid.
+- Deleting the server-side render does not delete the local download.
+
+Do not use browser alerts as a substitute for application error states.
+
+# SECTION 16 — REAL BROWSER AND MOBILE VERIFICATION
+
+Previous report states that browser and mobile UI tests were NOT_VERIFIED because browser binaries were unavailable.
+
+Inspect whether a suitable browser testing environment is now available.
+
+If available, test desktop browser behavior:
+
+- Login.
+- Video preview.
+- Timeline seeking.
+- Play/pause.
+- Download.
+- Downloaded file verification.
+- Render deletion.
+- Continued local file availability.
+
+If Android browser automation or a physical device is available, test Android Chrome download behavior.
+
+Do not claim Android testing if no Android device or suitable emulator was used.
+
+If browser testing remains unavailable:
+- Preserve the existing successful HTTP/filesystem evidence.
+- Record browser and mobile behavior as NOT_VERIFIED.
+- Do not install unrelated browser packages or modify system security settings without a clear need and approval.
+
+# SECTION 17 — OPENROUTER AND PROVIDER QUOTA POLICY
+
+The intended model is:
+
+`nvidia/nemotron-3.5-super-vl:free`
+
+Use only the configured free-tier provider.
+
+Before live testing:
+
+1. Inspect the existing quota guard.
+2. Confirm the reset has occurred.
+3. Confirm quota availability using actual provider evidence.
+4. Respect the 20-second cooldown.
+5. Avoid duplicate calls.
+6. Stop when daily quota is exhausted.
+
+For HTTP 429:
+- Record the exact error.
+- Distinguish daily quota exhaustion from short-term rate limiting.
+- Record the reset metadata if provided.
+- Do not repeat requests when the provider says the daily quota is exhausted.
+
+For Gemini HTTP 403:
+- Report the actual upstream failure.
+- Do not invent successful fallback inference.
+- Do not add credits.
+- Do not silently return template clips as live AI results.
+
+Provider identity must be based on actual response telemetry, not UI labels.
+
+# SECTION 18 — BUILD, TEST, AND REGRESSION
+
+Inspect `package.json` and use the actual project scripts.
+
+Run relevant checks, including:
+
+```bash
+tsc --noEmit
+npm run build
+```
+
+Run the existing test suites:
+
+```bash
+npx tsx tests/verify_diagnostics_and_report_persistence.ts
+npx tsx tests/verify_json_repair_and_strict_mode.ts --unit-only
+npx tsx tests/verify_checkpoint4_and_security.ts
+```
+
+Run live JSON and editorial tests only when provider quota is available:
+
+```bash
+npx tsx tests/verify_json_repair_and_strict_mode.ts
+npx tsx tests/e2e_editorial_pipeline_verification.ts --checkpoint=3
+```
+
+Inspect test script options before execution.
+
+Do not run suites concurrently if they share server ports, test files, or external API quota.
+
+Run targeted tests after each fix and a suitable regression suite afterward.
+
+Do not hide failed tests.
+
+Do not weaken tests simply to make them pass.
+
+# SECTION 19 — LOOP ENGINEERING FINALIZATION
+
+After all applicable checkpoints:
+
+1. Inspect all task states.
+2. Inspect all reports.
+3. Confirm every PASSED task has actual evidence.
+4. Confirm BLOCKED tasks have documented external reasons.
+5. Confirm NOT_VERIFIED items are visible.
+6. Inspect the Git diff.
+7. Inspect project state files.
+8. Run the official Loop Engineering audit if supported by the installed version.
+9. Verify the audit command and its actual output.
+10. Record the actual autonomy level.
+
+Do not change project files just to increase the audit score.
+
+Do not claim L2 or L3 autonomy unless the official audit and actual implementation support it.
+
+Do not claim independent Maker/Checker validation if only one agent was used.
+
+# SECTION 20 — PERSISTENT PROJECT STATE
+
+Update these files after each checkpoint:
+
+- `STATE.md`
+- `CHECKPOINT_LOG.md`
+- `loop-run-log.md`
+
+Update `LOOP.md` only when the workflow or engineering policy actually changes.
+
+Every update must include:
+
+- Checkpoint ID.
+- Date and time.
+- Task status.
+- Files changed.
+- Commands executed.
+- Test results.
+- Report paths.
+- Known limitations.
+- Next task.
+
+Archive historical reports without overwriting them.
+
+Use atomic writes where appropriate.
+
+If execution is interrupted, preserve the last completed state and mark in-flight work INCOMPLETE.
+
+On restart, resume from the last persisted state rather than repeating completed work.
+
+# SECTION 21 — ACCEPTANCE GATES
+
+Use the following acceptance gates.
+
+## Gate A — Core Reliability
+
+Required:
+- CP-1 verified.
+- CP-2 verified.
+- Build passes.
+- Diagnostics work.
+- No critical request lifecycle defect.
+
+## Gate B — AI Analysis Integrity
+
+Required:
+- CP-3A required tests verified.
+- Strict Nemotron isolation works.
+- JSON parsing and repair work.
+- Actual provider identity is recorded.
+- No fake success or silent fallback.
+
+## Gate C — Editorial Quality
+
+Required:
+- All four editorial styles verified.
+- Creator Direction verified.
+- Correct source timestamps.
+- Correct duration rules.
+- Meaningful content selection.
+- No duplicate or unrelated clips.
+
+## Gate D — Rendering and Downloads
+
+Required:
+- Four independent jobs.
+- Individual previews.
+- Valid MP4 metadata.
+- Full FFmpeg decode.
+- Download integrity.
+- Server deletion independence.
+- Storage and restart safety.
+
+## Gate E — Security and User Experience
+
+Required:
+- Owner authentication.
+- Private media authorization.
+- Safe deletion.
+- No secret exposure.
+- Correct error handling.
+- No critical frontend regression.
+
+## Gate F — Browser and Mobile
+
+Required for full browser/device acceptance:
+- Real desktop browser tests.
+- Actual video playback.
+- Actual browser downloads.
+- Actual local file persistence.
+- Android behavior only if tested on Android.
+
+If this gate cannot be tested, mark it NOT_VERIFIED and disclose the limitation.
+
+# SECTION 22 — FINAL ACCEPTANCE RULES
+
+Do not declare the whole application ACCEPTED if CP-3B is still blocked.
+
+Use exactly one final status:
+
+### ACCEPTED
+All required acceptance gates passed with actual evidence.
+
+### ACCEPTED WITH LIMITATIONS
+Core required functionality passes, but clearly disclosed noncritical browser/device or external integration limitations remain.
+
+### BLOCKED
+A critical requirement cannot be completed due to a confirmed defect or external blocker.
+
+### INCOMPLETE
+Work remains or verification is insufficient.
+
+Do not use the final report's wording to conceal blocked checkpoints.
+
+# SECTION 23 — REQUIRED FINAL REPORT
+
+Produce the final report in this format.
+
+## A. Overall Result
+
+- Final status:
+- Total checkpoints:
+- Passed:
+- Failed:
+- Blocked:
+- Not verified:
+- Current Loop Engineering level:
+- Latest run ID:
+
+## B. Checkpoint Summary
+
+| Checkpoint | Objective | Status | Actual Evidence | Remaining Issues |
+|---|---|---|---|---|
+| CP-1 | Request lifecycle and timeouts | | | |
+| CP-2 | Diagnostics and persistence | | | |
+| CP-3A | JSON and provider integrity | | | |
+| CP-3B | Editorial pipeline | | | |
+| CP-4A | Independent rendering | | | |
+| CP-4B | Individual previews | | | |
+| CP-4C | MP4 validation and decode | | | |
+| CP-4D | Download independence | | | |
+| CP-4E | Storage and delete safety | | | |
+| SEC | Authentication and security | | | |
+| UI | Frontend and user experience | | | |
+| BROWSER | Desktop/mobile verification | | | |
+| FINAL | Build and regression | | | |
+
+## C. AI Provider Verification
+
+- Intended provider:
+- Actual provider:
+- Actual model:
+- HTTP responses:
+- Rate-limit events:
+- JSON repair attempts:
+- Gemini fallback:
+- Template fallback:
+- Strict Nemotron result:
+
+## D. Editorial Test Results
+
+Report all four styles separately.
+
+Include:
+- Actual test result.
+- Candidate count.
+- Accepted count.
+- Rejected count.
+- Clip timestamps.
+- Clip durations.
+- Creator Direction result.
+- Provider identity.
+
+## E. Rendering and Download Results
+
+Include:
+- Independent job count.
+- Completed job count.
+- Failed job count.
+- Preview result.
+- FFprobe result.
+- Full decode result.
+- Download SHA-256 result.
+- Server deletion result.
+- Local file independence result.
+
+## F. Security Results
+
+Include:
+- Auth route checks.
+- Unauthorized access checks.
+- Private media protection.
+- Path traversal.
+- Secret exposure.
+- Safe child-process execution.
+- Storage deletion safety.
+
+## G. Browser and Mobile Limitations
+
+Explicitly identify which behaviors were actually tested and which remain NOT_VERIFIED.
+
+## H. Changed Files
+
+List exact paths, changes, and reasons.
+
+## I. Test Evidence
+
+List exact commands, actual results, and report locations.
+
+## J. Outstanding Issues
+
+For each issue:
+- Severity.
+- Exact error.
+- Root cause confidence.
+- Relevant file.
+- Attempted fix.
+- Remaining blocker.
+- Recommended next action.
+
+## K. Persistent Loop State
+
+List all tasks with their final status.
+
+## L. Final Acceptance Decision
+
+State ACCEPTED, ACCEPTED WITH LIMITATIONS, BLOCKED, or INCOMPLETE.
+
+Explain the decision using actual evidence.
+
+# FINAL EXECUTION INSTRUCTION
+
+Start immediately by inspecting the current repository state, existing reports, running processes, and persistent Loop Engineering state.
+
+Do not repeat previously passed work unnecessarily.
+
+Complete the remaining checkpoints in dependency order.
+
+Fix safe, reproducible defects.
+
+Run targeted and regression tests.
+
+Respect free-tier API limits.
+
+Preserve user data.
+
+Continue automatically through every safe and eligible task.
+
+If a task is blocked by provider quota or unavailable browser/device infrastructure, document the blocker and continue with independent tasks.
+
+Do not ask for approval for every small reversible code change.
+
+Request approval only before destructive operations, irreversible changes, paid services, secret changes, deployment, publication, or deletion of user data.
+
+Do not stop at a plan.
+
+Execute, verify, persist, and continue until all feasible checkpoints are complete.
+
+The final objective is a genuinely tested ClipGenius AI application, not an artificially green report.

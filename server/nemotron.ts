@@ -1,21 +1,25 @@
 import fs from 'fs';
-import { extractSampleFrames, probeVideo, verifyDecodableRange } from './ffmpeg.ts';
+import { extractSampleFrames, probeVideo, ProbeResult, verifyDecodableRange } from './ffmpeg.ts';
 import {
   precomputeVideoQualityContext,
+  SegmentQualityValidationResult,
   validateSegmentQuality,
 } from './contentQualityInspector.ts';
 import { getEditorialPolicy, validateEditorialDuration } from './editorialPolicy.ts';
 import {
   alignClipWithTranscriptSegments,
+  probeIntervalAudioActivity,
   verifyAndPrepareTranscript,
+  verifyExactQuoteMatchesInterval,
 } from './transcriptVerifier.ts';
 import {
+  CandidateVerificationChecks,
   ClipSuggestion,
   ViralScores,
   OpenRouterDetails,
   EditorialCurationStyle,
-  JsonParsingStatus,
   TranscriptVerificationInfo,
+  VerificationStatus,
 } from '../src/types/index.ts';
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
@@ -35,8 +39,12 @@ export const CLIP_ANALYSIS_JSON_SCHEMA = {
           hook: { type: 'string' },
           startTime: { type: 'number' },
           endTime: { type: 'number' },
+          factualDescription: { type: 'string' },
+          visualEvidence: { type: 'string' },
+          audioEvidence: { type: 'string' },
           reason: { type: 'string' },
           confidence: { type: 'number' },
+          uncertaintyNote: { type: 'string' },
           category: { type: 'string' },
           weakness: { type: 'string' },
           alternate_hooks: {
@@ -72,8 +80,12 @@ export const CLIP_ANALYSIS_JSON_SCHEMA = {
           'hook',
           'startTime',
           'endTime',
+          'factualDescription',
+          'visualEvidence',
+          'audioEvidence',
           'reason',
           'confidence',
+          'uncertaintyNote',
           'category',
           'weakness',
           'scores',
@@ -109,8 +121,12 @@ export interface NemotronParsedClip {
   hook: string;
   startTime: number;
   endTime: number;
+  factualDescription?: string;
+  visualEvidence?: string;
+  audioEvidence?: string;
   reason: string;
   confidence: number;
+  uncertaintyNote?: string;
   category: string;
   weakness: string;
   alternate_hooks?: string[];
@@ -133,6 +149,14 @@ export interface NemotronAnalysisResult {
   hasInsufficientContent: boolean;
   analysisSummary: string;
   transcriptVerification: TranscriptVerificationInfo;
+  sourceMetadata?: {
+    width: number;
+    height: number;
+    fps?: number;
+    format: string;
+    hasAudio: boolean;
+    bitrate?: number;
+  };
 }
 
 /**
@@ -179,6 +203,80 @@ export function extractAndSanitizeJson(raw: string): string {
   text = text.replace(/,\s*([}\]])/g, '$1');
 
   return text;
+}
+
+/**
+ * Normalize and sanitize non-OK OpenRouter HTTP errors across both primary and 1-shot repair calls.
+ * - Redacts `user_id` before logging or propagating messages.
+ * - Distinguishes daily free-tier quota exhaustion (`openrouter_free_tier_daily`) from short-term RPM rate limits.
+ */
+export function buildOpenRouterHttpError(
+  status: number,
+  errorBody: string,
+  contextLabel: 'primary' | 'repair' = 'primary'
+): Error & { statusCode: number; isDailyQuotaExhausted?: boolean; rateLimitResetAt?: string } {
+  let sanitizedBodyForLog = errorBody || '';
+  let parsedErr: any = null;
+  try {
+    parsedErr = JSON.parse(errorBody);
+    if (parsedErr && typeof parsedErr === 'object' && 'user_id' in parsedErr) {
+      const clone = { ...parsedErr };
+      delete clone.user_id;
+      sanitizedBodyForLog = JSON.stringify(clone);
+    }
+  } catch {
+    sanitizedBodyForLog = sanitizedBodyForLog.replace(/"user_id"\s*:\s*"[^"]*"/gi, '"user_id":"[redacted]"');
+  }
+
+  const label = contextLabel === 'repair' ? 'OpenRouter JSON repair' : 'OpenRouter';
+  console.error(`[Nemotron VL] ${label} error HTTP ${status}:`, sanitizedBodyForLog.slice(0, 500));
+
+  if (status === 429) {
+    const headersMeta = parsedErr?.error?.metadata?.headers || {};
+    const limitSource = String(parsedErr?.error?.metadata?.limit_source || '');
+    const errMessage = String(parsedErr?.error?.message || sanitizedBodyForLog || '');
+    const resetMs = Number(headersMeta['X-RateLimit-Reset']);
+    const resetIso = !isNaN(resetMs) && resetMs > 0 ? new Date(resetMs).toISOString() : undefined;
+    const limitTotal = headersMeta['X-RateLimit-Limit'];
+    const limitRemaining = headersMeta['X-RateLimit-Remaining'];
+
+    const isDailyQuotaExhausted =
+      limitSource === 'openrouter_free_tier_daily' ||
+      errMessage.includes('free-models-per-day') ||
+      /per[- ]day|daily limit/i.test(errMessage);
+
+    const detailMsg = isDailyQuotaExhausted
+      ? `${label} free-tier daily quota exhausted (HTTP 429, openrouter_free_tier_daily${
+          limitTotal ? `, ${limitRemaining ?? 0}/${limitTotal} remaining` : ''
+        }${resetIso ? `, resets at ${resetIso}` : ''}). Please wait for the daily reset or switch to Gemini.`
+      : `${label} rate limit reached (HTTP 429${resetIso ? `, resets at ${resetIso}` : ''}). Please wait a moment or use Gemini fallback.`;
+
+    const err = new Error(detailMsg) as Error & {
+      statusCode: number;
+      isDailyQuotaExhausted?: boolean;
+      rateLimitResetAt?: string;
+    };
+    err.statusCode = 429;
+    err.isDailyQuotaExhausted = isDailyQuotaExhausted;
+    err.rateLimitResetAt = resetIso;
+    return err;
+  }
+
+  if (status === 401 || status === 403) {
+    const err = new Error(
+      `OpenRouter authentication failed (HTTP ${status}). Check OPENROUTER_API_KEY in environment.`
+    ) as Error & { statusCode: number };
+    err.statusCode = status;
+    return err;
+  }
+
+  const prefix =
+    contextLabel === 'repair'
+      ? `OpenRouter JSON repair HTTP ${status}`
+      : `Nemotron AI analysis failed at OpenRouter (HTTP ${status})`;
+  const err = new Error(`${prefix}: ${sanitizedBodyForLog.slice(0, 150)}`) as Error & { statusCode: number };
+  err.statusCode = status;
+  return err;
 }
 
 /**
@@ -243,7 +341,7 @@ export async function repairNemotronJsonWithOpenRouter(
 
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(`OpenRouter JSON repair HTTP ${response.status}: ${errText.slice(0, 150)}`);
+    throw buildOpenRouterHttpError(response.status, errText, 'repair');
   }
 
   const data = await response.json();
@@ -265,8 +363,24 @@ export function validateAndNormalizeCandidate(
 ): NemotronParsedClip | null {
   if (!cand || typeof cand !== 'object') return null;
 
-  const rawStart = Number(cand.startTime ?? cand.start);
-  const rawEnd = Number(cand.endTime ?? cand.end);
+  const startVal = cand.startTime ?? cand.start;
+  const endVal = cand.endTime ?? cand.end;
+  if (
+    startVal === null ||
+    startVal === undefined ||
+    startVal === '' ||
+    typeof startVal === 'boolean' ||
+    endVal === null ||
+    endVal === undefined ||
+    endVal === '' ||
+    typeof endVal === 'boolean'
+  ) {
+    console.warn('[Nemotron VL] Dropping candidate with missing/empty timestamps:', cand);
+    return null;
+  }
+
+  const rawStart = Number(startVal);
+  const rawEnd = Number(endVal);
 
   if (isNaN(rawStart) || isNaN(rawEnd) || !isFinite(rawStart) || !isFinite(rawEnd)) {
     console.warn('[Nemotron VL] Dropping candidate with non-numeric timestamps:', cand);
@@ -286,12 +400,49 @@ export function validateAndNormalizeCandidate(
     return null;
   }
 
-  const title = String(cand.title || 'Key Video Highlight').trim();
+  const title = String(cand.title || '').trim();
   const hook = String(cand.hook || title).trim();
-  const reason = String(cand.reason || 'Meaningful visual/narrative moment').trim();
+  const factualDescription =
+    typeof cand.factualDescription === 'string' && cand.factualDescription.trim().length > 0
+      ? cand.factualDescription.trim()
+      : undefined;
+  const visualEvidence =
+    typeof cand.visualEvidence === 'string' && cand.visualEvidence.trim().length > 0
+      ? cand.visualEvidence.trim()
+      : undefined;
+  const audioEvidence =
+    typeof cand.audioEvidence === 'string' && cand.audioEvidence.trim().length > 0
+      ? cand.audioEvidence.trim()
+      : undefined;
+  const uncertaintyNote =
+    typeof cand.uncertaintyNote === 'string' && cand.uncertaintyNote.trim().length > 0
+      ? cand.uncertaintyNote.trim()
+      : undefined;
+  const reason = typeof cand.reason === 'string' ? cand.reason.trim() : '';
+
+  if (!title) {
+    console.warn('[Nemotron VL] Dropping candidate with empty title:', cand);
+    return null;
+  }
+
+  // Never fabricate a generic reason when neither reason nor factualDescription was supplied
+  if (!reason && !factualDescription) {
+    console.warn('[Nemotron VL] Dropping candidate with no factual description or selection reason:', cand);
+    return null;
+  }
+
+  // Keep confidence strictly honest (0 if missing/non-numeric — never coerce to 0.88)
+  let confidence = 0;
+  if (cand.confidence !== undefined && cand.confidence !== null && cand.confidence !== '') {
+    const numConf = Number(cand.confidence);
+    if (!isNaN(numConf) && isFinite(numConf)) {
+      confidence = numConf > 1 && numConf <= 100 ? numConf / 100 : numConf;
+      confidence = Math.round(Math.min(1.0, Math.max(0.0, confidence)) * 100) / 100;
+    }
+  }
+
   const category = String(cand.category || 'General').trim();
-  const weakness = String(cand.weakness || 'Requires punchy vertical captions').trim();
-  const confidence = Math.min(1.0, Math.max(0.5, Number(cand.confidence) || 0.88));
+  const weakness = String(cand.weakness || 'Unverified boundary pacing — review before publishing.').trim();
 
   // Normalize scores (allow 0-1 scale or 0-10 scale)
   const rawScores = cand.scores || {};
@@ -303,13 +454,13 @@ export function validateAndNormalizeCandidate(
   };
 
   const scores = {
-    hookStrength: normalizeScoreVal(rawScores.hookStrength ?? rawScores.hook, 8.5),
-    audienceCuriosity: normalizeScoreVal(rawScores.audienceCuriosity, 8.4),
-    informationalValue: normalizeScoreVal(rawScores.informationalValue ?? rawScores.emotion, 8.6),
-    storyFlow: normalizeScoreVal(rawScores.storyFlow, 8.3),
-    standaloneContext: normalizeScoreVal(rawScores.standaloneContext ?? rawScores.standalone, 8.7),
-    payoff: normalizeScoreVal(rawScores.payoff, 8.5),
-    shareability: normalizeScoreVal(rawScores.shareability ?? rawScores.share_worthy, 8.6),
+    hookStrength: normalizeScoreVal(rawScores.hookStrength ?? rawScores.hook, 7.5),
+    audienceCuriosity: normalizeScoreVal(rawScores.audienceCuriosity, 7.5),
+    informationalValue: normalizeScoreVal(rawScores.informationalValue ?? rawScores.emotion, 7.5),
+    storyFlow: normalizeScoreVal(rawScores.storyFlow, 7.5),
+    standaloneContext: normalizeScoreVal(rawScores.standaloneContext ?? rawScores.standalone, 7.5),
+    payoff: normalizeScoreVal(rawScores.payoff, 7.5),
+    shareability: normalizeScoreVal(rawScores.shareability ?? rawScores.share_worthy, 7.5),
   };
 
   const alternate_hooks = Array.isArray(cand.alternate_hooks)
@@ -320,16 +471,223 @@ export function validateAndNormalizeCandidate(
 
   return {
     title,
-    hook,
+    hook: hook || title,
     startTime,
     endTime,
-    reason,
+    factualDescription,
+    visualEvidence,
+    audioEvidence,
+    reason: reason || factualDescription || '',
     confidence,
+    uncertaintyNote,
     category,
     weakness,
     alternate_hooks,
     exact_quote,
     scores,
+  };
+}
+
+/**
+ * Combine uniform timeline anchors with adaptive frames immediately after detected scene transitions.
+ */
+export function buildAdaptiveFrameTimestamps(
+  segmentStart: number,
+  segmentEnd: number,
+  sceneTransitions: number[],
+  maxFrames: number = 18
+): number[] {
+  const effectiveDuration = Math.max(0, segmentEnd - segmentStart);
+  const baseCount =
+    effectiveDuration <= 180
+      ? Math.min(12, Math.max(6, Math.ceil(effectiveDuration / 12)))
+      : Math.min(14, Math.max(8, Math.floor(effectiveDuration / 45)));
+  const step = effectiveDuration / (baseCount + 1);
+  const candidates: number[] = [];
+
+  for (let i = 1; i <= baseCount; i++) {
+    candidates.push(Math.round((segmentStart + i * step) * 10) / 10);
+  }
+
+  for (const cut of sceneTransitions) {
+    if (cut > segmentStart + 0.5 && cut < segmentEnd - 0.8) {
+      candidates.push(Math.round(Math.min(segmentEnd - 0.3, cut + 0.8) * 10) / 10);
+    }
+  }
+
+  candidates.sort((a, b) => a - b);
+
+  // Deduplicate frames that are too close (< 2.0s) while keeping within maxFrames budget
+  const merged: number[] = [];
+  for (const ts of candidates) {
+    if (merged.length === 0 || ts - merged[merged.length - 1] >= 2.0) {
+      merged.push(ts);
+    }
+    if (merged.length >= maxFrames) break;
+  }
+
+  return merged;
+}
+
+/**
+ * Independently verify candidate grounding against inspected video/audio/transcript evidence.
+ * Never marks a candidate 'verified' merely because JSON parsed!
+ */
+export function evaluateCandidateVerification(params: {
+  candidate: NemotronParsedClip;
+  qualityCheck: SegmentQualityValidationResult;
+  isDecodable: boolean;
+  editorialDurationValid: boolean;
+  hasAudio: boolean;
+  intervalAudio: { audioActive: boolean; meanVolumeDb?: number; maxVolumeDb?: number };
+  transcriptAvailable: boolean;
+  transcriptSegmentText?: string;
+  boundaryAdjusted: boolean;
+}): {
+  accepted: boolean;
+  verificationStatus: VerificationStatus;
+  uncertaintyNote?: string;
+  rejectionReason?: string;
+  checks: CandidateVerificationChecks;
+} {
+  const {
+    candidate,
+    qualityCheck,
+    isDecodable,
+    editorialDurationValid,
+    hasAudio,
+    intervalAudio,
+    transcriptAvailable,
+    transcriptSegmentText,
+    boundaryAdjusted,
+  } = params;
+
+  const visualMotionDetected = qualityCheck.visualMotionDetected !== false;
+  const quoteCheck = transcriptAvailable
+    ? verifyExactQuoteMatchesInterval(candidate.exact_quote, transcriptSegmentText)
+    : { matches: true, overlapRatio: 1 };
+
+  const checks: CandidateVerificationChecks = {
+    boundsValid: qualityCheck.isValid,
+    decodable: isDecodable,
+    visualDetailValid: qualityCheck.isValid,
+    visualMotionDetected,
+    audioIntervalActive: hasAudio ? intervalAudio.audioActive : undefined,
+    transcriptAligned: transcriptAvailable ? Boolean(transcriptSegmentText) && quoteCheck.matches : false,
+    editorialDurationValid,
+    confidenceReported: candidate.confidence > 0,
+  };
+
+  if (!qualityCheck.isValid) {
+    return {
+      accepted: false,
+      verificationStatus: 'rejected',
+      rejectionReason: qualityCheck.rejectionReason || 'Failed visual/transition quality check.',
+      checks,
+    };
+  }
+
+  if (!isDecodable) {
+    return {
+      accepted: false,
+      verificationStatus: 'rejected',
+      rejectionReason: 'Video frames could not be decoded cleanly by FFmpeg in this timestamp range.',
+      checks,
+    };
+  }
+
+  if (!editorialDurationValid) {
+    return {
+      accepted: false,
+      verificationStatus: 'rejected',
+      rejectionReason: 'Clip duration failed editorial duration policy after verification.',
+      checks,
+    };
+  }
+
+  if (candidate.confidence > 0 && candidate.confidence < 0.45) {
+    return {
+      accepted: false,
+      verificationStatus: 'rejected',
+      rejectionReason: `Model confidence too low (${(candidate.confidence * 100).toFixed(0)}%) to justify selection.`,
+      checks,
+    };
+  }
+
+  if (!visualMotionDetected && (!hasAudio || !intervalAudio.audioActive)) {
+    return {
+      accepted: false,
+      verificationStatus: 'rejected',
+      rejectionReason: 'Static frozen frames with no visual progression and no active audio in candidate interval.',
+      checks,
+    };
+  }
+
+  if (transcriptAvailable && candidate.exact_quote && !quoteCheck.matches) {
+    return {
+      accepted: false,
+      verificationStatus: 'rejected',
+      rejectionReason: quoteCheck.reason || 'Exact spoken quote failed transcript alignment in this timestamp window.',
+      checks,
+    };
+  }
+
+  if (
+    !transcriptAvailable &&
+    !candidate.visualEvidence &&
+    !candidate.factualDescription &&
+    candidate.exact_quote &&
+    candidate.exact_quote.length > 20
+  ) {
+    return {
+      accepted: false,
+      verificationStatus: 'rejected',
+      rejectionReason: 'Candidate claimed spoken quote without any transcript or visual evidence backing.',
+      checks,
+    };
+  }
+
+  const uncertainties: string[] = [];
+  if (candidate.confidence === 0) {
+    uncertainties.push('Model omitted explicit numeric confidence score.');
+  } else if (candidate.confidence < 0.7) {
+    uncertainties.push(`Moderate AI confidence (${(candidate.confidence * 100).toFixed(0)}%).`);
+  }
+
+  if (!candidate.factualDescription || !candidate.visualEvidence) {
+    uncertainties.push('Detailed factual description or visual evidence notes were incomplete.');
+  }
+
+  if (boundaryAdjusted) {
+    uncertainties.push('Timestamps were adjusted around blank fades/scene transitions; preview range recommended.');
+  }
+
+  if (!visualMotionDetected && hasAudio && intervalAudio.audioActive) {
+    uncertainties.push('Minimal visual pixel motion detected across interval (relies primarily on audio track).');
+  }
+
+  if (hasAudio && !intervalAudio.audioActive) {
+    uncertainties.push('Audio track is silent or near-silent (<= -65 dB) within this timestamp range.');
+  }
+
+  if (hasAudio && !transcriptAvailable) {
+    uncertainties.push('No verified transcript or subtitle track available; speech claims unverified.');
+  }
+
+  const normalizedModelNote = candidate.uncertaintyNote?.trim();
+  if (
+    normalizedModelNote &&
+    !/^(none|n\/a|no uncertainty|high certainty|fully verified)$/i.test(normalizedModelNote)
+  ) {
+    uncertainties.push(normalizedModelNote);
+  }
+
+  const verificationStatus: VerificationStatus = uncertainties.length === 0 ? 'verified' : 'uncertain';
+  return {
+    accepted: true,
+    verificationStatus,
+    uncertaintyNote: uncertainties.length > 0 ? uncertainties.join(' ') : undefined,
+    checks,
   };
 }
 
@@ -414,14 +772,21 @@ export async function analyzeWithNemotron(
     );
   }
 
-  // 2. Probe audio & verify transcript honestly (User-provided or Embedded subtitles, never fabricated)
-  let hasAudio = true;
+  // 2. Probe full container metadata + audio & verify transcript honestly (never fabricated)
+  let sourceProbe: ProbeResult = {
+    duration,
+    width: 1920,
+    height: 1080,
+    format: 'mp4',
+    fps: 30,
+    hasAudio: true,
+  };
   try {
-    const probe = await probeVideo(sourcePath);
-    hasAudio = probe.hasAudio;
+    sourceProbe = await probeVideo(sourcePath);
   } catch {
-    hasAudio = true;
+    // Keep conservative defaults if metadata probe throws
   }
+  const hasAudio = sourceProbe.hasAudio;
 
   const transcriptCtx = await verifyAndPrepareTranscript({
     videoPath: sourcePath,
@@ -433,20 +798,16 @@ export async function analyzeWithNemotron(
   // 3. Precompute video blackouts & scene transitions once
   const precomputedQuality = await precomputeVideoQualityContext(sourcePath);
 
-  // 4. Dense Full-Video Frame Sampling across the entire segment so multiple distinct moments are visible
-  const sampleCount =
-    effectiveSegmentDuration <= 180
-      ? Math.min(14, Math.max(6, Math.ceil(effectiveSegmentDuration / 10)))
-      : Math.min(16, Math.max(8, Math.floor(effectiveSegmentDuration / 45)));
-  const step = effectiveSegmentDuration / (sampleCount + 1);
-  const frameTimestamps: number[] = [];
-
-  for (let i = 1; i <= sampleCount; i++) {
-    frameTimestamps.push(Math.round((segmentStart + i * step) * 10) / 10);
-  }
+  // 4. Adaptive Full-Video Frame Sampling (uniform anchors + detected scene-transition anchors)
+  const frameTimestamps = buildAdaptiveFrameTimestamps(
+    segmentStart,
+    segmentEnd,
+    precomputedQuality.sceneTransitions,
+    18
+  );
 
   console.log(
-    `[Nemotron VL] Extracting ${frameTimestamps.length} frames across [${segmentStart}s - ${segmentEnd}s] for "${filename}" (${policy.label}, target ${policy.idealRange})...`
+    `[Nemotron VL] Extracting ${frameTimestamps.length} adaptive frames across [${segmentStart}s - ${segmentEnd}s] for "${filename}" (${policy.label}, target ${policy.idealRange})...`
   );
   const extractedFrames = await extractSampleFrames(sourcePath, frameTimestamps, 448);
 
@@ -494,14 +855,15 @@ ${transcriptCtx.rawTranscript.slice(0, 5000)}`
     : `TRANSCRIPT STATUS: NO SPEECH TRANSCRIPT AVAILABLE (${transcriptCtx.verification.notes}). Rely strictly on visual frames and on-screen text. Do NOT invent or claim spoken quotes that are not visible in frames.`;
 
   const systemPrompt = `You are NVIDIA Nemotron 3.5 Super VL, a world-class video intelligence, narrative comprehension, and viral retention analyzer.
-Your mission is to analyze the entire video timeline and identify ONLY genuinely valuable, coherent, distinct short-form clips matching the user's Editorial Curation Style.
+Your mission is to analyze the entire video timeline and identify ONLY genuinely valuable, coherent, distinct short-form clips grounded strictly in observed source video evidence and matching the user's Editorial Curation Style.
 
-MANDATORY EDITORIAL DURATION & QUALITY RULES:
+MANDATORY SOURCE-GROUNDING & EDITORIAL RULES:
 1. SELECTED STYLE: ${policy.label.toUpperCase()}
    - REQUIRED DURATION RANGE: ${policy.minDuration} to ${policy.maxDuration} seconds (endTime - startTime MUST satisfy ${policy.minDuration} <= duration <= ${policy.maxDuration}).
    - ${policy.guidance}
    - NEVER return a 7-second or short fragment when ${policy.minDuration}-${policy.maxDuration}s is required.
-   - If the source video does NOT contain a sufficiently long coherent segment (${policy.minDuration}s+), set "hasInsufficientContent": true, return an empty "clips": [] array, and explain why in "analysisSummary" instead of inventing duration or padding unrelated footage.
+   - Editorial style & Creator Direction guide selection among GENUINE moments ONLY — NEVER invent or pad unsupported clips just to reach target count.
+   - If the source video does NOT contain a sufficiently long coherent segment (${policy.minDuration}s+), set "hasInsufficientContent": true, return an empty "clips": [] array, and explain why in "analysisSummary".
 2. MULTIPLE CANDIDATE DISCOVERY:
    - Search the ENTIRE timeline (${segmentStart.toFixed(1)}s to ${segmentEnd.toFixed(1)}s) to find up to ${clipCount} DISTINCT, non-overlapping moments covering different ideas or chapters.
    - Avoid returning repeated variations of the same topic or overlapping timestamps.
@@ -509,7 +871,9 @@ MANDATORY EDITORIAL DURATION & QUALITY RULES:
 3. SCENE-TRANSITION & QUALITY FILTERING:
    - Reject SMPTE color bars, EBU color bars, test patterns, pitch-black dead screens, or frozen technical failures.
    - Normal editing transitions or brief chapter cuts between valid topic frames are acceptable if continuity holds, or adjust start/end cleanly to align with complete topic boundaries.
-4. HONEST EVIDENCE:
+4. STRUCTURED EVIDENCE & HONEST UNCERTAINTY:
+   - Provide concrete factualDescription (what literally happens in this interval), visualEvidence (specific visual subjects/text/changes seen in frames), and audioEvidence (exact spoken lines from transcript, or "Visual-only: no verified transcript" when absent).
+   - Provide honest confidence (0.0 to 1.0) and uncertaintyNote explaining any gap (e.g., sparse frames, no transcript, mid-thought cut). Set uncertaintyNote to "None" only if evidence across the interval is complete and unambiguous.
    - Do NOT invent timestamps outside [${segmentStart.toFixed(1)}, ${segmentEnd.toFixed(1)}].
    - If no transcript was supplied, leave exact_quote empty or cite ONLY exact text visible on-screen.
 5. Output ONLY valid JSON conforming strictly to the schema.`;
@@ -518,6 +882,7 @@ MANDATORY EDITORIAL DURATION & QUALITY RULES:
 VIDEO INFORMATION:
 - Title: "${filename}"
 - Category: "${category}"
+- Inspected Source Properties: ${sourceProbe.width}x${sourceProbe.height} @ ${sourceProbe.fps || 30}fps (${sourceProbe.format}), Audio Track: ${hasAudio ? (transcriptCtx.verification.audioActive ? 'Active audio present' : 'Audio track present (low/silent signal)') : 'No audio stream'}
 - Segment Range: ${segmentStart.toFixed(1)}s to ${segmentEnd.toFixed(1)}s (Total Video Duration: ${duration.toFixed(1)}s)
 - Target Platforms: ${targetPlatforms.join(', ')}
 - Editorial Curation Style: ${policy.style} (${policy.label}) — STRICT DURATION: ${policy.minDuration}s to ${policy.maxDuration}s
@@ -529,11 +894,11 @@ ${transcriptSection}
 PREVIOUSLY SELECTED MOMENTS (DO NOT DUPLICATE OR OVERLAP):
 ${prevClipsText}
 
-VISUAL TIMELINE FRAMES (${extractedFrames.length} frames sampled across entire video):
+VISUAL TIMELINE FRAMES (${extractedFrames.length} adaptive frames sampled across entire video):
 ${frameDescriptions.join('\n')}
 
 INSTRUCTIONS:
-Identify up to ${clipCount} distinct, high-retention moments across the full timeline that strictly satisfy ${policy.minDuration}s–${policy.maxDuration}s duration and "${policy.label}" curation.
+Identify up to ${clipCount} distinct, evidence-grounded moments across the full timeline that strictly satisfy ${policy.minDuration}s–${policy.maxDuration}s duration and "${policy.label}" curation.
 Score each candidate on 7 dimensions (1.0 to 10.0): hookStrength, audienceCuriosity, informationalValue, storyFlow, standaloneContext, payoff, shareability.
 `;
 
@@ -621,20 +986,15 @@ Score each candidate on 7 dimensions (1.0 to 10.0): hookStrength, audienceCurios
 
     if (!response.ok) {
       const errorBody = await response.text();
-      console.error(`[Nemotron VL] OpenRouter error HTTP ${response.status} (attempt ${attempt}/2):`, errorBody);
 
       if (response.status >= 502 && response.status <= 504 && attempt < 2) {
+        console.warn(`[Nemotron VL] Transient OpenRouter HTTP ${response.status} on attempt ${attempt}/2. Retrying once...`);
         networkRetryCount++;
         await new Promise((r) => setTimeout(r, 1500));
         continue;
       }
-      if (response.status === 429) {
-        throw new Error('OpenRouter rate limit reached (HTTP 429). Please wait a moment or use Gemini fallback.');
-      }
-      if (response.status === 401 || response.status === 403) {
-        throw new Error(`OpenRouter authentication failed (HTTP ${response.status}). Check OPENROUTER_API_KEY in environment.`);
-      }
-      throw new Error(`Nemotron AI analysis failed at OpenRouter (HTTP ${response.status}): ${errorBody.slice(0, 150)}`);
+
+      throw buildOpenRouterHttpError(response.status, errorBody, 'primary');
     }
 
     try {
@@ -784,6 +1144,15 @@ Score each candidate on 7 dimensions (1.0 to 10.0): hookStrength, audienceCurios
       openRouterDetails.jsonParsingStatus = 'schema_validation_failed';
     }
 
+    const sourceMetaPayload = {
+      width: sourceProbe.width,
+      height: sourceProbe.height,
+      fps: sourceProbe.fps,
+      format: sourceProbe.format,
+      hasAudio: sourceProbe.hasAudio,
+      bitrate: sourceProbe.bitrate,
+    };
+
     return {
       clips: [],
       rejectedMoments,
@@ -791,10 +1160,11 @@ Score each candidate on 7 dimensions (1.0 to 10.0): hookStrength, audienceCurios
       hasInsufficientContent: true,
       analysisSummary,
       transcriptVerification: transcriptCtx.verification,
+      sourceMetadata: sourceMetaPayload,
     };
   }
 
-  // 9. Validate every candidate against Editorial Duration, Transcript Alignment, Decodability, and Scene-Transition Filtering
+  // 9. Validate every candidate against Editorial Duration, Transcript Alignment, Interval Audio, Decodability, and Visual Progression
   const validatedClips: ClipSuggestion[] = [];
   let alignedTranscriptCount = 0;
 
@@ -844,7 +1214,7 @@ Score each candidate on 7 dimensions (1.0 to 10.0): hookStrength, audienceCurios
       }
     }
 
-    // Step 9C: Transition-aware Quality Inspection (inspects actual frames around transitions & blackouts)
+    // Step 9C: Transition-aware Quality Inspection + Visual Progression check
     const qualityCheck = await validateSegmentQuality(
       sourcePath,
       workStart,
@@ -877,26 +1247,33 @@ Score each candidate on 7 dimensions (1.0 to 10.0): hookStrength, audienceCurios
       transitionNotes.push(...qualityCheck.transitionNotes);
     }
 
-    // Step 9D: Re-verify Editorial Duration and Decodability on final timestamps
+    // Step 9D: Re-verify Editorial Duration, Decodability, and Interval Audio on final timestamps
     const finalDurCheck = validateEditorialDuration(finalDuration, policy.style);
-    if (!finalDurCheck.valid) {
-      rejectedMoments.push({
-        title: m.title,
-        start: finalStart,
-        end: finalEnd,
-        reason: `After boundary adjustment: ${finalDurCheck.reason}`,
-      });
-      continue;
-    }
+    const [isDecodable, intervalAudio] = await Promise.all([
+      verifyDecodableRange(sourcePath, finalStart, finalEnd),
+      probeIntervalAudioActivity(sourcePath, finalStart, finalEnd, hasAudio),
+    ]);
 
-    const isDecodable = await verifyDecodableRange(sourcePath, finalStart, finalEnd);
-    if (!isDecodable) {
+    const verification = evaluateCandidateVerification({
+      candidate: m,
+      qualityCheck,
+      isDecodable,
+      editorialDurationValid: finalDurCheck.valid,
+      hasAudio,
+      intervalAudio,
+      transcriptAvailable: transcriptCtx.verification.transcriptAvailable,
+      transcriptSegmentText,
+      boundaryAdjusted,
+    });
+
+    if (!verification.accepted) {
       rejectedMoments.push({
         title: m.title,
         start: finalStart,
         end: finalEnd,
-        reason: 'Video frames could not be decoded by FFmpeg in this range.',
+        reason: verification.rejectionReason || finalDurCheck.reason || 'Candidate failed source verification checks.',
       });
+      console.warn(`[Nemotron VL] Rejected candidate "${m.title}" [${finalStart}s-${finalEnd}s]: ${verification.rejectionReason}`);
       continue;
     }
 
@@ -929,6 +1306,14 @@ Score each candidate on 7 dimensions (1.0 to 10.0): hookStrength, audienceCurios
         : ['Did you notice this key turning point?', 'Watch how this resolves.'];
 
     const quote = transcriptSegmentText || (transcriptCtx.verification.transcriptAvailable ? m.exact_quote : undefined);
+    const factualDesc = m.factualDescription || m.reason;
+    const resolvedAudioEvidence =
+      m.audioEvidence ||
+      (transcriptSegmentText
+        ? `Transcript [${finalStart.toFixed(1)}s-${finalEnd.toFixed(1)}s]: "${transcriptSegmentText.slice(0, 220)}"`
+        : hasAudio
+        ? `Audio stream ${intervalAudio.audioActive ? 'active' : 'near-silent'} (${intervalAudio.meanVolumeDb !== undefined ? `${intervalAudio.meanVolumeDb.toFixed(1)} dB mean` : 'probed'}); no verified transcript.`
+        : 'No audio track in source video.');
 
     validatedClips.push({
       id: `clip-nemotron-${Date.now()}-${i + 1}`,
@@ -937,7 +1322,13 @@ Score each candidate on 7 dimensions (1.0 to 10.0): hookStrength, audienceCurios
       sourceVideoId,
       title: m.title,
       hook: m.hook,
-      description: m.reason,
+      description: factualDesc,
+      factualDescription: factualDesc,
+      visualEvidence: m.visualEvidence,
+      audioEvidence: resolvedAudioEvidence,
+      uncertaintyNote: verification.uncertaintyNote,
+      verificationStatus: verification.verificationStatus,
+      verificationChecks: verification.checks,
       startTime: finalStart,
       endTime: finalEnd,
       start: finalStart,
@@ -1037,17 +1428,25 @@ Score each candidate on 7 dimensions (1.0 to 10.0): hookStrength, audienceCurios
 
   transcriptCtx.verification.alignedSegmentsCount = alignedTranscriptCount;
 
-  const hasInsufficientContent = finalClips.length === 0 || modelReportedInsufficient;
+  const sourceMetaPayload = {
+    width: sourceProbe.width,
+    height: sourceProbe.height,
+    fps: sourceProbe.fps,
+    format: sourceProbe.format,
+    hasAudio: sourceProbe.hasAudio,
+    bitrate: sourceProbe.bitrate,
+  };
 
   return {
     clips: finalClips,
     rejectedMoments,
     openRouterDetails,
-    hasInsufficientContent: finalClips.length === 0 ? true : false,
+    hasInsufficientContent: finalClips.length === 0 ? true : modelReportedInsufficient && finalClips.length === 0,
     analysisSummary:
       finalClips.length === 0
-        ? `${analysisSummary} (${rejectedMoments.length} candidate(s) rejected for editorial duration or quality compliance.)`
+        ? `${analysisSummary} (${rejectedMoments.length} candidate(s) rejected for editorial duration or source verification compliance.)`
         : analysisSummary,
     transcriptVerification: transcriptCtx.verification,
+    sourceMetadata: sourceMetaPayload,
   };
 }

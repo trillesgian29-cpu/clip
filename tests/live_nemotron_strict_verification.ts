@@ -11,10 +11,23 @@ async function runLiveVerification() {
   console.log('CLIPGENIUS AI — LIVE NEMOTRON STRICT MODE VERIFICATION');
   console.log('================================================================\n');
 
+  // 0. Authenticate Owner Session
+  const passcode = process.env.OWNER_PASSCODE || 'clipgenius-owner-2026';
+  const loginRes = await fetch(`${API_BASE}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ passcode }),
+  });
+  const loginData = await loginRes.json();
+  if (!loginRes.ok || !loginData?.token) {
+    throw new Error(`Owner auth failed: ${JSON.stringify(loginData)}`);
+  }
+  const authHeaders = { Authorization: `Bearer ${loginData.token}` };
+
   // 1. Verify Video in Registry
   const videoId = 'vid-1794500535048-97';
   console.log(`[Step 1] Querying /api/videos to locate target video (${videoId})...`);
-  const videosRes = await fetch(`${API_BASE}/api/videos`);
+  const videosRes = await fetch(`${API_BASE}/api/videos`, { headers: authHeaders });
   const videosData = await videosRes.json();
   const targetVideo = videosData.videos?.find((v: any) => v.id === videoId);
 
@@ -43,6 +56,7 @@ async function runLiveVerification() {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...authHeaders,
     },
     body: JSON.stringify(requestPayload),
   });

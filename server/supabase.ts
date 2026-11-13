@@ -254,6 +254,54 @@ export async function saveRenderJobRecord(job: RenderJob): Promise<void> {
 }
 
 /**
+ * Retrieve persisted render jobs from local DB (and optionally Supabase)
+ */
+export async function getRenderJobs(): Promise<RenderJob[]> {
+  const localDb = loadLocalDb();
+  const localById = new Map<string, RenderJob>();
+  for (const r of localDb.renderedClips) {
+    localById.set(r.id, r);
+  }
+
+  if (supabaseClient) {
+    try {
+      const { data, error } = await supabaseClient
+        .from('clipgenius_rendered_clips')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        for (const row of data) {
+          if (!localById.has(row.id)) {
+            localById.set(row.id, {
+              id: row.id,
+              clipId: row.clip_id,
+              title: row.title,
+              sourceVideoId: row.source_video_id,
+              startTime: Number(row.start_time) || 0,
+              endTime: Number(row.end_time) || 0,
+              aspectRatio: row.aspect_ratio || '9:16',
+              status: row.status || 'completed',
+              progress: Number(row.progress) || 0,
+              outputFilename: row.output_filename,
+              downloadUrl: row.download_url || `/api/clips/download/${row.id}`,
+              fileSize: row.file_size ? Number(row.file_size) : undefined,
+              duration: row.duration ? Number(row.duration) : 0,
+              createdAt: row.created_at,
+              completedAt: row.completed_at,
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to query render jobs in Supabase, using local db:', err);
+    }
+  }
+
+  return Array.from(localById.values());
+}
+
+/**
  * Save an individually published clip record
  */
 export async function savePublishedClip(clip: PublishedClip): Promise<PublishedClip> {

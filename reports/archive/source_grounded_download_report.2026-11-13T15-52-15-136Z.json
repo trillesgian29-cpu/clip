@@ -1,0 +1,29 @@
+{
+  "reportVersion": "2.0",
+  "runId": "run-1794585109236-6763",
+  "runStatus": "running",
+  "startedAt": "2026-11-13T15:51:49.235Z",
+  "updatedAt": "2026-11-13T15:52:03.377Z",
+  "completedAt": null,
+  "archivedPreviousReportPath": null,
+  "interruptedReason": null,
+  "metadata": {},
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "incomplete": 0,
+    "skipped": 0
+  },
+  "tests": {
+    "req1_metadata_and_adaptive_sampling": {
+      "name": "req1_metadata_and_adaptive_sampling",
+      "status": "failed",
+      "startedAt": "2026-11-13T15:51:57.739Z",
+      "completedAt": "2026-11-13T15:52:03.374Z",
+      "elapsedMs": 5636,
+      "error": "ASSERTION FAILED: Expected >=2 scene transitions, got [25]",
+      "telemetry": null
+    }
+  }
+}

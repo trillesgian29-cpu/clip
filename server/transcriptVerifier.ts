@@ -1,9 +1,9 @@
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { TranscriptSegment, TranscriptVerificationInfo, EditorialCurationStyle } from '../src/types/index.ts';
 import { getEditorialPolicy } from './editorialPolicy.ts';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 /**
  * Parse timestamp strings like "00:01:23.450", "01:23,450", "01:23" into seconds
@@ -83,8 +83,13 @@ export async function probeAndExtractEmbeddedSubtitles(
   videoPath: string
 ): Promise<{ found: boolean; rawSrt?: string; language?: string }> {
   try {
-    const probeCmd = `ffprobe -v error -select_streams s -show_entries stream=index,codec_name:stream_tags=language -of json "${videoPath}"`;
-    const { stdout } = await execAsync(probeCmd);
+    const { stdout } = await execFileAsync('ffprobe', [
+      '-v', 'error',
+      '-select_streams', 's',
+      '-show_entries', 'stream=index,codec_name:stream_tags=language',
+      '-of', 'json',
+      videoPath,
+    ]);
     const data = JSON.parse(stdout || '{}');
     const streams = data.streams || [];
 
@@ -92,8 +97,11 @@ export async function probeAndExtractEmbeddedSubtitles(
       return { found: false };
     }
 
-    const extractCmd = `ffmpeg -v error -i "${videoPath}" -map 0:s:0 -f srt -`;
-    const { stdout: srtText } = await execAsync(extractCmd, { maxBuffer: 5 * 1024 * 1024 });
+    const { stdout: srtText } = await execFileAsync(
+      'ffmpeg',
+      ['-v', 'error', '-i', videoPath, '-map', '0:s:0', '-f', 'srt', '-'],
+      { maxBuffer: 5 * 1024 * 1024 }
+    );
     if (srtText && srtText.trim().length > 10) {
       return {
         found: true,
@@ -119,8 +127,19 @@ export async function probeAudioSignalActivity(
   }
   try {
     // Check first 60s of audio to gauge real volume levels fast
-    const cmd = `ffmpeg -v info -t 60 -i "${videoPath}" -af "volumedetect" -vn -f null - 2>&1`;
-    const { stdout, stderr } = await execAsync(cmd, { maxBuffer: 4 * 1024 * 1024 });
+    const { stdout, stderr } = await execFileAsync(
+      'ffmpeg',
+      [
+        '-v', 'info',
+        '-t', '60',
+        '-i', videoPath,
+        '-af', 'volumedetect',
+        '-vn',
+        '-f', 'null',
+        '-',
+      ],
+      { maxBuffer: 4 * 1024 * 1024 }
+    );
     const output = (stdout || '') + (stderr || '');
     const meanMatch = output.match(/mean_volume:\s*([-0-9.]+)\s*dB/);
     const maxMatch = output.match(/max_volume:\s*([-0-9.]+)\s*dB/);
@@ -134,6 +153,95 @@ export async function probeAudioSignalActivity(
   } catch {
     return { audioActive: hasAudio };
   }
+}
+
+/**
+ * Probe audio stream activity specifically within a candidate clip interval [startTime, endTime]
+ */
+export async function probeIntervalAudioActivity(
+  videoPath: string,
+  startTime: number,
+  endTime: number,
+  hasAudio: boolean
+): Promise<{ audioActive: boolean; meanVolumeDb?: number; maxVolumeDb?: number }> {
+  if (!hasAudio || endTime <= startTime) {
+    return { audioActive: false };
+  }
+  try {
+    const safeStart = Math.max(0, startTime);
+    const clipDuration = Math.max(0.5, endTime - safeStart);
+    const { stdout, stderr } = await execFileAsync(
+      'ffmpeg',
+      [
+        '-v', 'info',
+        '-ss', safeStart.toFixed(3),
+        '-i', videoPath,
+        '-t', clipDuration.toFixed(3),
+        '-af', 'volumedetect',
+        '-vn',
+        '-f', 'null',
+        '-',
+      ],
+      { maxBuffer: 4 * 1024 * 1024 }
+    );
+    const output = (stdout || '') + (stderr || '');
+    const meanMatch = output.match(/mean_volume:\s*([-0-9.]+)\s*dB/);
+    const maxMatch = output.match(/max_volume:\s*([-0-9.]+)\s*dB/);
+
+    const meanDb = meanMatch ? parseFloat(meanMatch[1]) : undefined;
+    const maxDb = maxMatch ? parseFloat(maxMatch[1]) : undefined;
+
+    const audioActive = maxDb !== undefined ? maxDb > -65 : true;
+    return { audioActive, meanVolumeDb: meanDb, maxVolumeDb: maxDb };
+  } catch {
+    return { audioActive: hasAudio };
+  }
+}
+
+/**
+ * Verify that a claimed exact_quote actually overlaps the real transcript words in the candidate interval
+ */
+export function verifyExactQuoteMatchesInterval(
+  quote: string | undefined,
+  intervalTranscriptText: string | undefined
+): { matches: boolean; overlapRatio: number; reason?: string } {
+  if (!quote || !quote.trim()) {
+    return { matches: true, overlapRatio: 1 };
+  }
+  if (!intervalTranscriptText || !intervalTranscriptText.trim()) {
+    return {
+      matches: false,
+      overlapRatio: 0,
+      reason: 'Candidate claimed an exact spoken quote, but no verified transcript speech overlaps this timestamp range.',
+    };
+  }
+
+  const normalizeTokens = (txt: string) =>
+    txt
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter((w) => w.length >= 4);
+
+  const quoteTokens = normalizeTokens(quote);
+  if (quoteTokens.length < 2) {
+    return { matches: true, overlapRatio: 1 };
+  }
+
+  const transcriptSet = new Set(normalizeTokens(intervalTranscriptText));
+  let matched = 0;
+  for (const tok of quoteTokens) {
+    if (transcriptSet.has(tok)) matched++;
+  }
+  const overlapRatio = matched / quoteTokens.length;
+  if (overlapRatio < 0.25) {
+    return {
+      matches: false,
+      overlapRatio,
+      reason: `Claimed quote does not match the verified transcript in this interval (token overlap ${(overlapRatio * 100).toFixed(0)}%).`,
+    };
+  }
+  return { matches: true, overlapRatio };
 }
 
 export interface VerifiedTranscriptContext {

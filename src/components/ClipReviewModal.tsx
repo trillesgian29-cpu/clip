@@ -274,6 +274,55 @@ export const ClipReviewModal: React.FC<ClipReviewModalProps> = ({
             </div>
           )}
 
+          {/* Source-Grounded Evidence & Verification Summary */}
+          {(clip.factualDescription || clip.visualEvidence || clip.audioEvidence || clip.uncertaintyNote || clip.verificationStatus) && (
+            <div className="rounded-xl border border-neutral-800 bg-neutral-950/70 p-4 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <h5 className="text-xs font-bold uppercase tracking-wider text-neutral-300">
+                  Source Evidence & Verification
+                </h5>
+                {clip.verificationStatus && (
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                      clip.verificationStatus === 'verified'
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                        : clip.verificationStatus === 'uncertain'
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                        : 'bg-red-500/20 text-red-300 border border-red-500/30'
+                    }`}
+                  >
+                    {clip.verificationStatus}
+                    {typeof clip.confidence === 'number' && clip.confidence > 0 ? ` (${Math.round(clip.confidence * 100)}%)` : ''}
+                  </span>
+                )}
+              </div>
+              {clip.factualDescription && (
+                <p className="text-xs text-neutral-300 leading-relaxed">
+                  <strong className="text-neutral-200">What Happens: </strong>
+                  {clip.factualDescription}
+                </p>
+              )}
+              {clip.visualEvidence && (
+                <p className="text-xs text-neutral-400 leading-relaxed">
+                  <strong className="text-sky-300">Visual Evidence: </strong>
+                  {clip.visualEvidence}
+                </p>
+              )}
+              {clip.audioEvidence && (
+                <p className="text-xs text-neutral-400 leading-relaxed">
+                  <strong className="text-emerald-300">Audio / Transcript: </strong>
+                  {clip.audioEvidence}
+                </p>
+              )}
+              {clip.uncertaintyNote && (
+                <p className="text-xs text-amber-300 leading-relaxed">
+                  <strong>Uncertainty Note: </strong>
+                  {clip.uncertaintyNote}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Weakness Analysis */}
           {clip.weakness && (
             <div className="rounded-xl border border-amber-500/20 bg-amber-950/20 p-4">

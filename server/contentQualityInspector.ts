@@ -1,8 +1,8 @@
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export interface ContentInterval {
   start: number;
@@ -52,8 +52,20 @@ export async function inspectFrameSignalStats(
 ): Promise<FrameSignalStats | null> {
   try {
     const safeTs = Math.max(0, timestampSec);
-    const cmd = `ffmpeg -v info -ss ${safeTs.toFixed(3)} -i "${videoPath}" -vframes 1 -vf "scale=160:120,signalstats=stat=vrep,metadata=mode=print" -an -f null - 2>&1`;
-    const { stdout, stderr } = await execAsync(cmd, { maxBuffer: 2 * 1024 * 1024 });
+    const { stdout, stderr } = await execFileAsync(
+      'ffmpeg',
+      [
+        '-v', 'info',
+        '-ss', safeTs.toFixed(3),
+        '-i', videoPath,
+        '-vframes', '1',
+        '-vf', 'scale=160:120,signalstats=stat=vrep,metadata=mode=print',
+        '-an',
+        '-f', 'null',
+        '-',
+      ],
+      { maxBuffer: 2 * 1024 * 1024 }
+    );
     const output = (stdout || '') + (stderr || '');
 
     const parseMetric = (name: string): number | null => {
@@ -108,8 +120,18 @@ export async function detectBlackScreenIntervals(
   minDurationSec: number = 1.0
 ): Promise<Array<{ start: number; end: number; duration: number }>> {
   try {
-    const cmd = `ffmpeg -v info -i "${videoPath}" -vf "blackdetect=d=${minDurationSec}:pic_th=0.98:pix_th=0.04" -an -f null - 2>&1`;
-    const { stdout, stderr } = await execAsync(cmd, { maxBuffer: 10 * 1024 * 1024 });
+    const { stdout, stderr } = await execFileAsync(
+      'ffmpeg',
+      [
+        '-v', 'info',
+        '-i', videoPath,
+        '-vf', `blackdetect=d=${minDurationSec}:pic_th=0.98:pix_th=0.04`,
+        '-an',
+        '-f', 'null',
+        '-',
+      ],
+      { maxBuffer: 10 * 1024 * 1024 }
+    );
     const output = (stdout || '') + (stderr || '');
 
     const candidateIntervals: Array<{ start: number; end: number; duration: number }> = [];
@@ -149,8 +171,18 @@ export async function detectSceneTransitions(
   sceneThreshold: number = 0.25
 ): Promise<number[]> {
   try {
-    const cmd = `ffmpeg -v info -i "${videoPath}" -vf "select='gt(scene,${sceneThreshold})',showinfo" -an -f null - 2>&1`;
-    const { stdout, stderr } = await execAsync(cmd, { maxBuffer: 10 * 1024 * 1024 });
+    const { stdout, stderr } = await execFileAsync(
+      'ffmpeg',
+      [
+        '-v', 'info',
+        '-i', videoPath,
+        '-vf', `select='gt(scene,${sceneThreshold})',showinfo`,
+        '-an',
+        '-f', 'null',
+        '-',
+      ],
+      { maxBuffer: 10 * 1024 * 1024 }
+    );
     const output = (stdout || '') + (stderr || '');
 
     const transitions: number[] = [];
@@ -192,8 +224,17 @@ export async function detectSilenceIntervals(
   minDurationSec: number = 2.0
 ): Promise<Array<{ start: number; end: number; duration: number }>> {
   try {
-    const cmd = `ffmpeg -v info -i "${videoPath}" -af "silencedetect=noise=${noiseThresholdDb}dB:d=${minDurationSec}" -f null - 2>&1`;
-    const { stdout, stderr } = await execAsync(cmd, { maxBuffer: 10 * 1024 * 1024 });
+    const { stdout, stderr } = await execFileAsync(
+      'ffmpeg',
+      [
+        '-v', 'info',
+        '-i', videoPath,
+        '-af', `silencedetect=noise=${noiseThresholdDb}dB:d=${minDurationSec}`,
+        '-f', 'null',
+        '-',
+      ],
+      { maxBuffer: 10 * 1024 * 1024 }
+    );
     const output = (stdout || '') + (stderr || '');
 
     const intervals: Array<{ start: number; end: number; duration: number }> = [];
@@ -260,6 +301,80 @@ export interface SegmentQualityValidationResult {
   transitionNotes: string[];
   detectedIssues: string[];
   rejectionReason?: string;
+  visualMotionDetected?: boolean;
+  visualDeltaRatio?: number;
+}
+
+/**
+ * Extract 96x54 grayscale luma buffers at start, midpoint, and end to detect frozen/static dead frames
+ * while accurately recognizing real localized speaker/UI motion.
+ */
+export async function inspectIntervalVisualProgression(
+  videoPath: string,
+  startTime: number,
+  endTime: number
+): Promise<{ hasVisualProgression: boolean; meanPixelDeltaRatio: number }> {
+  const safeStart = Math.max(0, startTime + 0.4);
+  const safeEnd = Math.max(safeStart + 0.2, endTime - 0.4);
+  const mid = (safeStart + safeEnd) / 2;
+  const timestamps = [safeStart, mid, safeEnd];
+
+  const width = 96;
+  const height = 54;
+  const pixelCount = width * height;
+
+  const extractGrayBuffer = async (ts: number): Promise<Buffer | null> => {
+    try {
+      const { stdout } = await execFileAsync(
+        'ffmpeg',
+        [
+          '-v', 'error',
+          '-ss', ts.toFixed(3),
+          '-i', videoPath,
+          '-vframes', '1',
+          '-vf', `scale=${width}:${height},format=gray`,
+          '-f', 'rawvideo',
+          '-',
+        ],
+        { encoding: 'buffer', maxBuffer: 512 * 1024 } as any
+      );
+      const buf = Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout || '');
+      return buf.length >= pixelCount ? buf.subarray(0, pixelCount) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const frames = await Promise.all(timestamps.map((t) => extractGrayBuffer(t)));
+  const validFrames = frames.filter((b): b is Buffer => b !== null);
+  if (validFrames.length < 2) {
+    return { hasVisualProgression: true, meanPixelDeltaRatio: 1 };
+  }
+
+  let maxDelta = 0;
+  let maxChangedRatio = 0;
+  for (let i = 0; i < validFrames.length - 1; i++) {
+    const a = validFrames[i];
+    const b = validFrames[i + 1];
+    let diffSum = 0;
+    let changedPixels = 0;
+    for (let p = 0; p < a.length; p++) {
+      const d = Math.abs(a[p] - b[p]);
+      diffSum += d;
+      if (d >= 10) changedPixels++;
+    }
+    const normDelta = diffSum / (a.length * 255);
+    const changedRatio = changedPixels / a.length;
+    if (normDelta > maxDelta) maxDelta = normDelta;
+    if (changedRatio > maxChangedRatio) maxChangedRatio = changedRatio;
+  }
+
+  // Strictly identical or frozen (< 0.00025 mean luma delta AND < 0.2% pixels changing by >= 10 levels)
+  const hasVisualProgression = maxDelta >= 0.00025 || maxChangedRatio >= 0.002;
+  return {
+    hasVisualProgression,
+    meanPixelDeltaRatio: Math.round(maxDelta * 100000) / 100000,
+  };
 }
 
 /**
@@ -429,6 +544,14 @@ export async function validateSegmentQuality(
     }
   }
 
+  // 4B. Inspect visual progression across adjusted interval (detect completely frozen frames)
+  const progression = await inspectIntervalVisualProgression(videoPath, adjStart, adjEnd);
+  if (!progression.hasVisualProgression && internalCuts.length === 0) {
+    transitionNotes.push(
+      `Static visual frame warning: pixel variation across [${adjStart.toFixed(1)}s-${adjEnd.toFixed(1)}s] is ${(progression.meanPixelDeltaRatio * 100).toFixed(3)}%.`
+    );
+  }
+
   // 5. Final duration check after any boundary adjustments
   const finalDuration = Math.round((adjEnd - adjStart) * 10) / 10;
   if (finalDuration < minEditorialDuration - 0.5) {
@@ -455,6 +578,8 @@ export async function validateSegmentQuality(
     transitionNotes,
     detectedIssues: issues,
     rejectionReason: issues.length > 0 ? issues.join(' ') : undefined,
+    visualMotionDetected: progression.hasVisualProgression || internalCuts.length > 0,
+    visualDeltaRatio: progression.meanPixelDeltaRatio,
   };
 }
 

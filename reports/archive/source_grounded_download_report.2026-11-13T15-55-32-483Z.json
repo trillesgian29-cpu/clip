@@ -1,0 +1,29 @@
+{
+  "reportVersion": "2.0",
+  "runId": "run-1794585274337-40",
+  "runStatus": "running",
+  "startedAt": "2026-11-13T15:54:34.337Z",
+  "updatedAt": "2026-11-13T15:55:04.345Z",
+  "completedAt": null,
+  "archivedPreviousReportPath": "/app/applet/reports/archive/source_grounded_download_report.2026-11-13T15-54-34-338Z.json",
+  "interruptedReason": null,
+  "metadata": {},
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "incomplete": 0,
+    "skipped": 0
+  },
+  "tests": {
+    "req1_metadata_and_adaptive_sampling": {
+      "name": "req1_metadata_and_adaptive_sampling",
+      "status": "failed",
+      "startedAt": "2026-11-13T15:54:48.552Z",
+      "completedAt": "2026-11-13T15:55:04.343Z",
+      "elapsedMs": 15791,
+      "error": "ASSERTION FAILED: Expected >=2 scene transitions, got [55]",
+      "telemetry": null
+    }
+  }
+}

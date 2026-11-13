@@ -1,33 +1,33 @@
 {
   "reportVersion": "2.0",
-  "runId": "run-1794552043972-4271",
+  "runId": "run-1794585392909-7140",
   "runStatus": "completed",
-  "startedAt": "2026-11-13T06:40:43.972Z",
-  "updatedAt": "2026-11-13T06:41:40.779Z",
-  "completedAt": "2026-11-13T06:41:40.779Z",
-  "archivedPreviousReportPath": null,
+  "startedAt": "2026-11-13T15:56:32.909Z",
+  "updatedAt": "2026-11-13T15:56:33.786Z",
+  "completedAt": "2026-11-13T15:56:33.785Z",
+  "archivedPreviousReportPath": "/app/applet/reports/archive/json_repair_strict_report.2026-11-13T15-56-32-910Z.json",
   "interruptedReason": null,
   "metadata": {
     "counts": {
-      "total": 25,
-      "passed": 25,
+      "total": 20,
+      "passed": 17,
       "failed": 0,
-      "skipped": 0
+      "skipped": 3
     }
   },
   "summary": {
-    "total": 25,
-    "passed": 25,
+    "total": 20,
+    "passed": 17,
     "failed": 0,
     "incomplete": 0,
-    "skipped": 0
+    "skipped": 3
   },
   "tests": {
     "test_01_valid_raw_json_parses_cleanly": {
       "name": "test_01_valid_raw_json_parses_cleanly",
       "status": "passed",
-      "startedAt": "2026-11-13T06:40:43.974Z",
-      "completedAt": "2026-11-13T06:40:43.975Z",
+      "startedAt": "2026-11-13T15:56:32.911Z",
+      "completedAt": "2026-11-13T15:56:32.912Z",
       "elapsedMs": 1,
       "error": null,
       "telemetry": null,
@@ -39,9 +39,9 @@
     "test_02_extracts_clean_json_from_json_code_fence": {
       "name": "test_02_extracts_clean_json_from_json_code_fence",
       "status": "passed",
-      "startedAt": "2026-11-13T06:40:43.976Z",
-      "completedAt": "2026-11-13T06:40:43.976Z",
-      "elapsedMs": 0,
+      "startedAt": "2026-11-13T15:56:32.913Z",
+      "completedAt": "2026-11-13T15:56:32.914Z",
+      "elapsedMs": 1,
       "error": null,
       "telemetry": null,
       "details": {
@@ -52,8 +52,8 @@
     "test_03_cleaned_fenced_json_parses_successfully_with_jso": {
       "name": "test_03_cleaned_fenced_json_parses_successfully_with_jso",
       "status": "passed",
-      "startedAt": "2026-11-13T06:40:43.977Z",
-      "completedAt": "2026-11-13T06:40:43.977Z",
+      "startedAt": "2026-11-13T15:56:32.914Z",
+      "completedAt": "2026-11-13T15:56:32.914Z",
       "elapsedMs": 0,
       "error": null,
       "telemetry": null,
@@ -65,9 +65,9 @@
     "test_04_sanitizer_cleans_trailing_commas_before_closing_": {
       "name": "test_04_sanitizer_cleans_trailing_commas_before_closing_",
       "status": "passed",
-      "startedAt": "2026-11-13T06:40:43.978Z",
-      "completedAt": "2026-11-13T06:40:43.978Z",
-      "elapsedMs": 0,
+      "startedAt": "2026-11-13T15:56:32.914Z",
+      "completedAt": "2026-11-13T15:56:32.915Z",
+      "elapsedMs": 1,
       "error": null,
       "telemetry": null,
       "details": {
@@ -78,8 +78,8 @@
     "test_05_truncated_json_output_is_rejected_rather_than_pa": {
       "name": "test_05_truncated_json_output_is_rejected_rather_than_pa",
       "status": "passed",
-      "startedAt": "2026-11-13T06:40:43.979Z",
-      "completedAt": "2026-11-13T06:40:43.979Z",
+      "startedAt": "2026-11-13T15:56:32.916Z",
+      "completedAt": "2026-11-13T15:56:32.916Z",
       "elapsedMs": 0,
       "error": null,
       "telemetry": null,
@@ -88,12 +88,38 @@
         "detail": ""
       }
     },
-    "test_06_candidate_normalized_successfully": {
-      "name": "test_06_candidate_normalized_successfully",
+    "test_06_empty_raw_response_string_sanitizes_to_empty_str": {
+      "name": "test_06_empty_raw_response_string_sanitizes_to_empty_str",
       "status": "passed",
-      "startedAt": "2026-11-13T06:40:43.979Z",
-      "completedAt": "2026-11-13T06:40:43.981Z",
-      "elapsedMs": 2,
+      "startedAt": "2026-11-13T15:56:32.916Z",
+      "completedAt": "2026-11-13T15:56:32.917Z",
+      "elapsedMs": 1,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Empty raw response string sanitizes to empty string cleanly",
+        "detail": ""
+      }
+    },
+    "test_07_unexpected_response_format_yields_zero_clip_cand": {
+      "name": "test_07_unexpected_response_format_yields_zero_clip_cand",
+      "status": "passed",
+      "startedAt": "2026-11-13T15:56:32.917Z",
+      "completedAt": "2026-11-13T15:56:32.917Z",
+      "elapsedMs": 0,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "label": "Unexpected response format yields zero clip candidates rather than fabricating",
+        "detail": ""
+      }
+    },
+    "test_08_candidate_normalized_successfully": {
+      "name": "test_08_candidate_normalized_successfully",
+      "status": "passed",
+      "startedAt": "2026-11-13T15:56:32.918Z",
+      "completedAt": "2026-11-13T15:56:32.918Z",
+      "elapsedMs": 0,
       "error": null,
       "telemetry": null,
       "details": {
@@ -101,12 +127,12 @@
         "detail": ""
       }
     },
-    "test_07_timestamps_converted_to_numeric": {
-      "name": "test_07_timestamps_converted_to_numeric",
+    "test_09_timestamps_converted_to_numeric": {
+      "name": "test_09_timestamps_converted_to_numeric",
       "status": "passed",
-      "startedAt": "2026-11-13T06:40:43.981Z",
-      "completedAt": "2026-11-13T06:40:43.981Z",
-      "elapsedMs": 0,
+      "startedAt": "2026-11-13T15:56:32.918Z",
+      "completedAt": "2026-11-13T15:56:32.919Z",
+      "elapsedMs": 1,
       "error": null,
       "telemetry": null,
       "details": {
@@ -114,12 +140,12 @@
         "detail": ""
       }
     },
-    "test_08_scores_correctly_scaled_from_0_1_to_0_10_scale": {
-      "name": "test_08_scores_correctly_scaled_from_0_1_to_0_10_scale",
+    "test_10_scores_correctly_scaled_from_0_1_to_0_10_scale": {
+      "name": "test_10_scores_correctly_scaled_from_0_1_to_0_10_scale",
       "status": "passed",
-      "startedAt": "2026-11-13T06:40:43.982Z",
-      "completedAt": "2026-11-13T06:40:43.982Z",
-      "elapsedMs": 0,
+      "startedAt": "2026-11-13T15:56:32.919Z",
+      "completedAt": "2026-11-13T15:56:32.920Z",
+      "elapsedMs": 1,
       "error": null,
       "telemetry": null,
       "details": {
@@ -127,12 +153,12 @@
         "detail": ""
       }
     },
-    "test_09_alternate_hooks_preserved": {
-      "name": "test_09_alternate_hooks_preserved",
+    "test_11_alternate_hooks_preserved": {
+      "name": "test_11_alternate_hooks_preserved",
       "status": "passed",
-      "startedAt": "2026-11-13T06:40:43.982Z",
-      "completedAt": "2026-11-13T06:40:43.982Z",
-      "elapsedMs": 0,
+      "startedAt": "2026-11-13T15:56:32.920Z",
+      "completedAt": "2026-11-13T15:56:32.921Z",
+      "elapsedMs": 1,
       "error": null,
       "telemetry": null,
       "details": {
@@ -140,409 +166,91 @@
         "detail": ""
       }
     },
-    "test_10_confirmed_malformed_json_with_unescaped_quotes_f": {
-      "name": "test_10_confirmed_malformed_json_with_unescaped_quotes_f",
+    "test_12_null_or_empty_string_timestamps_are_rejected_cle": {
+      "name": "test_12_null_or_empty_string_timestamps_are_rejected_cle",
       "status": "passed",
-      "startedAt": "2026-11-13T06:40:43.984Z",
-      "completedAt": "2026-11-13T06:40:43.985Z",
+      "startedAt": "2026-11-13T15:56:32.922Z",
+      "completedAt": "2026-11-13T15:56:32.923Z",
       "elapsedMs": 1,
       "error": null,
       "telemetry": null,
       "details": {
-        "label": "Confirmed malformed JSON with unescaped quotes fails native JSON.parse",
+        "label": "Null or empty string timestamps are rejected cleanly (never coerced to 0)",
         "detail": ""
       }
     },
-    "test_11_repair_call_returned_repairedjson_object": {
-      "name": "test_11_repair_call_returned_repairedjson_object",
+    "test_13_negative_reversed_and_out_of_bounds_timestamps_a": {
+      "name": "test_13_negative_reversed_and_out_of_bounds_timestamps_a",
       "status": "passed",
-      "startedAt": "2026-11-13T06:40:46.776Z",
-      "completedAt": "2026-11-13T06:40:46.776Z",
+      "startedAt": "2026-11-13T15:56:32.925Z",
+      "completedAt": "2026-11-13T15:56:32.925Z",
       "elapsedMs": 0,
       "error": null,
       "telemetry": null,
       "details": {
-        "label": "Repair call returned repairedJson object",
-        "detail": "",
-        "repairAttempted": true,
-        "repairLatencyMs": 447,
-        "repairError": null,
-        "model": "nvidia/nemotron-3.5-super-vl:free"
+        "label": "Negative, reversed, and out-of-bounds timestamps are rejected",
+        "detail": ""
       }
     },
-    "test_12_repaired_json_contains_clips_array": {
-      "name": "test_12_repaired_json_contains_clips_array",
+    "test_14_openrouter_daily_429_classified_as_isdailyquotae": {
+      "name": "test_14_openrouter_daily_429_classified_as_isdailyquotae",
       "status": "passed",
-      "startedAt": "2026-11-13T06:40:46.777Z",
-      "completedAt": "2026-11-13T06:40:46.777Z",
+      "startedAt": "2026-11-13T15:56:32.927Z",
+      "completedAt": "2026-11-13T15:56:32.927Z",
       "elapsedMs": 0,
       "error": null,
       "telemetry": null,
       "details": {
-        "label": "Repaired JSON contains clips array",
-        "detail": "",
-        "repairAttempted": true,
-        "repairLatencyMs": 447,
-        "repairError": null,
-        "model": "nvidia/nemotron-3.5-super-vl:free"
+        "label": "OpenRouter daily 429 classified as isDailyQuotaExhausted=true without leaking user_id",
+        "detail": ""
       }
     },
-    "test_13_repaired_json_clips_count_0": {
-      "name": "test_13_repaired_json_clips_count_0",
+    "test_15_short_term_rpm_429_classified_as_isdailyquotaexh": {
+      "name": "test_15_short_term_rpm_429_classified_as_isdailyquotaexh",
       "status": "passed",
-      "startedAt": "2026-11-13T06:40:46.777Z",
-      "completedAt": "2026-11-13T06:40:46.777Z",
+      "startedAt": "2026-11-13T15:56:32.928Z",
+      "completedAt": "2026-11-13T15:56:32.928Z",
       "elapsedMs": 0,
       "error": null,
       "telemetry": null,
       "details": {
-        "label": "Repaired JSON clips count > 0",
-        "detail": "",
-        "repairAttempted": true,
-        "repairLatencyMs": 447,
-        "repairError": null,
-        "model": "nvidia/nemotron-3.5-super-vl:free"
+        "label": "Short-term RPM 429 classified as isDailyQuotaExhausted=false and repair errors scrub user_id",
+        "detail": ""
       }
     },
-    "test_14_repaired_json_preserved_timestamps": {
-      "name": "test_14_repaired_json_preserved_timestamps",
-      "status": "passed",
-      "startedAt": "2026-11-13T06:40:46.777Z",
-      "completedAt": "2026-11-13T06:40:46.777Z",
+    "test_16_1_shot_json_repair_via_openrouter_4_checks_": {
+      "name": "test_16_1_shot_json_repair_via_openrouter_4_checks_",
+      "status": "skipped",
+      "startedAt": "2026-11-13T15:56:32.929Z",
+      "completedAt": "2026-11-13T15:56:32.929Z",
       "elapsedMs": 0,
-      "error": null,
-      "telemetry": null,
-      "details": {
-        "label": "Repaired JSON preserved timestamps",
-        "detail": "",
-        "repairAttempted": true,
-        "repairLatencyMs": 447,
-        "repairError": null,
-        "model": "nvidia/nemotron-3.5-super-vl:free"
-      }
+      "error": "Skipped via --unit-only (OpenRouter free-tier quota guard)",
+      "telemetry": null
     },
-    "test_15_static_no_progression_sample_correctly_rejected_": {
-      "name": "test_15_static_no_progression_sample_correctly_rejected_",
-      "status": "passed",
-      "startedAt": "2026-11-13T06:41:03.915Z",
-      "completedAt": "2026-11-13T06:41:03.916Z",
-      "elapsedMs": 1,
-      "error": null,
-      "telemetry": {
-        "providerUsed": "nemotron",
-        "modelUsed": "nvidia/nemotron-3.5-super-vl:free",
-        "httpStatus": 200,
-        "openRouterHttpStatus": 200,
-        "latencyMs": 3812,
-        "clientElapsedMs": 17138,
-        "networkRetryCount": 0,
-        "repairRetryCount": 0,
-        "finishReason": "stop",
-        "fallbackUsed": false,
-        "openRouterRequestId": "gen-1794552060-JeG9Hmjnq3zuGXIfY0lO",
-        "serverRequestId": null,
-        "tokenUsage": {
-          "promptTokens": 3025,
-          "completionTokens": 403,
-          "reasoningTokens": 301,
-          "totalTokens": 3428
-        },
-        "cost": 0
-      },
-      "details": {
-        "label": "Static/no-progression sample correctly rejected under viral_shorts (0 clips, hasInsufficientContent=true, no Gemini fallback)",
-        "detail": "provider=nemotron, model=nvidia/nemotron-3.5-super-vl:free, clips=0, insufficient=true, fallback=false",
-        "fixturePath": "/app/applet/samples/sample-podcast-1794235524195.mp4",
-        "clipsCount": 0,
-        "hasInsufficientContent": true,
-        "analysisSummary": "The entire video timeline (0.0s to 65.0s) consists exclusively of SMPTE color bars / test pattern footage with no actual podcast content, speakers, narrative, or meaningful visual information. Per editorial rules, SMPTE color bars and technical test patterns must be rejected. Therefore, no valid 30-60 second viral short clips can be extracted from this source."
-      }
-    },
-    "test_16_provider_used_was_nemotron": {
-      "name": "test_16_provider_used_was_nemotron",
-      "status": "passed",
-      "startedAt": "2026-11-13T06:41:40.381Z",
-      "completedAt": "2026-11-13T06:41:40.381Z",
+    "test_17_static_single_slide_negative_test": {
+      "name": "test_17_static_single_slide_negative_test",
+      "status": "skipped",
+      "startedAt": "2026-11-13T15:56:32.929Z",
+      "completedAt": "2026-11-13T15:56:32.929Z",
       "elapsedMs": 0,
-      "error": null,
-      "telemetry": {
-        "providerUsed": "nemotron",
-        "modelUsed": "nvidia/nemotron-3.5-super-vl:free",
-        "httpStatus": 200,
-        "openRouterHttpStatus": 200,
-        "latencyMs": 26333,
-        "clientElapsedMs": 36464,
-        "networkRetryCount": 0,
-        "repairRetryCount": 0,
-        "finishReason": "stop",
-        "fallbackUsed": false,
-        "openRouterRequestId": "gen-1794552072-NqBxwXsGqSkef9EvklCZ",
-        "serverRequestId": null,
-        "tokenUsage": {
-          "promptTokens": 5308,
-          "completionTokens": 3602,
-          "reasoningTokens": 3105,
-          "totalTokens": 8910
-        },
-        "cost": 0
-      },
-      "details": {
-        "label": "Provider used was nemotron",
-        "detail": "provider=nemotron"
-      }
+      "error": "Skipped via --unit-only (OpenRouter free-tier quota guard)",
+      "telemetry": null
     },
-    "test_17_model_used_was_nvidia_nemotron_3_5_super_vl_free": {
-      "name": "test_17_model_used_was_nvidia_nemotron_3_5_super_vl_free",
-      "status": "passed",
-      "startedAt": "2026-11-13T06:41:40.381Z",
-      "completedAt": "2026-11-13T06:41:40.381Z",
+    "test_18_live_strict_nemotron_coherent_fixture_8_checks_": {
+      "name": "test_18_live_strict_nemotron_coherent_fixture_8_checks_",
+      "status": "skipped",
+      "startedAt": "2026-11-13T15:56:32.931Z",
+      "completedAt": "2026-11-13T15:56:32.931Z",
       "elapsedMs": 0,
-      "error": null,
-      "telemetry": {
-        "providerUsed": "nemotron",
-        "modelUsed": "nvidia/nemotron-3.5-super-vl:free",
-        "httpStatus": 200,
-        "openRouterHttpStatus": 200,
-        "latencyMs": 26333,
-        "clientElapsedMs": 36464,
-        "networkRetryCount": 0,
-        "repairRetryCount": 0,
-        "finishReason": "stop",
-        "fallbackUsed": false,
-        "openRouterRequestId": "gen-1794552072-NqBxwXsGqSkef9EvklCZ",
-        "serverRequestId": null,
-        "tokenUsage": {
-          "promptTokens": 5308,
-          "completionTokens": 3602,
-          "reasoningTokens": 3105,
-          "totalTokens": 8910
-        },
-        "cost": 0
-      },
-      "details": {
-        "label": "Model used was nvidia/nemotron-3.5-super-vl:free",
-        "detail": "model=nvidia/nemotron-3.5-super-vl:free"
-      }
+      "error": "Skipped via --unit-only (OpenRouter free-tier quota guard)",
+      "telemetry": null
     },
-    "test_18_fallback_was_not_used_in_strict_mode": {
-      "name": "test_18_fallback_was_not_used_in_strict_mode",
+    "test_19_strict_mode_throws_error_instead_of_calling_gemi": {
+      "name": "test_19_strict_mode_throws_error_instead_of_calling_gemi",
       "status": "passed",
-      "startedAt": "2026-11-13T06:41:40.382Z",
-      "completedAt": "2026-11-13T06:41:40.382Z",
+      "startedAt": "2026-11-13T15:56:32.935Z",
+      "completedAt": "2026-11-13T15:56:32.935Z",
       "elapsedMs": 0,
-      "error": null,
-      "telemetry": {
-        "providerUsed": "nemotron",
-        "modelUsed": "nvidia/nemotron-3.5-super-vl:free",
-        "httpStatus": 200,
-        "openRouterHttpStatus": 200,
-        "latencyMs": 26333,
-        "clientElapsedMs": 36464,
-        "networkRetryCount": 0,
-        "repairRetryCount": 0,
-        "finishReason": "stop",
-        "fallbackUsed": false,
-        "openRouterRequestId": "gen-1794552072-NqBxwXsGqSkef9EvklCZ",
-        "serverRequestId": null,
-        "tokenUsage": {
-          "promptTokens": 5308,
-          "completionTokens": 3602,
-          "reasoningTokens": 3105,
-          "totalTokens": 8910
-        },
-        "cost": 0
-      },
-      "details": {
-        "label": "Fallback was NOT used in strict mode",
-        "detail": "fallbackUsed=false"
-      }
-    },
-    "test_19_clips_extracted_0_from_coherent_multi_topic_vide": {
-      "name": "test_19_clips_extracted_0_from_coherent_multi_topic_vide",
-      "status": "passed",
-      "startedAt": "2026-11-13T06:41:40.382Z",
-      "completedAt": "2026-11-13T06:41:40.382Z",
-      "elapsedMs": 0,
-      "error": null,
-      "telemetry": {
-        "providerUsed": "nemotron",
-        "modelUsed": "nvidia/nemotron-3.5-super-vl:free",
-        "httpStatus": 200,
-        "openRouterHttpStatus": 200,
-        "latencyMs": 26333,
-        "clientElapsedMs": 36464,
-        "networkRetryCount": 0,
-        "repairRetryCount": 0,
-        "finishReason": "stop",
-        "fallbackUsed": false,
-        "openRouterRequestId": "gen-1794552072-NqBxwXsGqSkef9EvklCZ",
-        "serverRequestId": null,
-        "tokenUsage": {
-          "promptTokens": 5308,
-          "completionTokens": 3602,
-          "reasoningTokens": 3105,
-          "totalTokens": 8910
-        },
-        "cost": 0
-      },
-      "details": {
-        "label": "Clips extracted > 0 from coherent multi-topic video",
-        "detail": "clips=2",
-        "clips": [
-          {
-            "title": "AI Startups: Distribution Beats Benchmarks",
-            "startTime": 1,
-            "endTime": 36.5,
-            "duration": 35.5
-          },
-          {
-            "title": "Short-Form Retention: The 3-Second Rule",
-            "startTime": 39,
-            "endTime": 74.5,
-            "duration": 35.5
-          }
-        ],
-        "rejected": []
-      }
-    },
-    "test_20_cost_is_0_00_free_model_": {
-      "name": "test_20_cost_is_0_00_free_model_",
-      "status": "passed",
-      "startedAt": "2026-11-13T06:41:40.382Z",
-      "completedAt": "2026-11-13T06:41:40.383Z",
-      "elapsedMs": 1,
-      "error": null,
-      "telemetry": {
-        "providerUsed": "nemotron",
-        "modelUsed": "nvidia/nemotron-3.5-super-vl:free",
-        "httpStatus": 200,
-        "openRouterHttpStatus": 200,
-        "latencyMs": 26333,
-        "clientElapsedMs": 36464,
-        "networkRetryCount": 0,
-        "repairRetryCount": 0,
-        "finishReason": "stop",
-        "fallbackUsed": false,
-        "openRouterRequestId": "gen-1794552072-NqBxwXsGqSkef9EvklCZ",
-        "serverRequestId": null,
-        "tokenUsage": {
-          "promptTokens": 5308,
-          "completionTokens": 3602,
-          "reasoningTokens": 3105,
-          "totalTokens": 8910
-        },
-        "cost": 0
-      },
-      "details": {
-        "label": "Cost is $0.00 (free model)",
-        "detail": "cost=0"
-      }
-    },
-    "test_21_json_parsing_status_is_valid_or_repaired": {
-      "name": "test_21_json_parsing_status_is_valid_or_repaired",
-      "status": "passed",
-      "startedAt": "2026-11-13T06:41:40.383Z",
-      "completedAt": "2026-11-13T06:41:40.383Z",
-      "elapsedMs": 0,
-      "error": null,
-      "telemetry": {
-        "providerUsed": "nemotron",
-        "modelUsed": "nvidia/nemotron-3.5-super-vl:free",
-        "httpStatus": 200,
-        "openRouterHttpStatus": 200,
-        "latencyMs": 26333,
-        "clientElapsedMs": 36464,
-        "networkRetryCount": 0,
-        "repairRetryCount": 0,
-        "finishReason": "stop",
-        "fallbackUsed": false,
-        "openRouterRequestId": "gen-1794552072-NqBxwXsGqSkef9EvklCZ",
-        "serverRequestId": null,
-        "tokenUsage": {
-          "promptTokens": 5308,
-          "completionTokens": 3602,
-          "reasoningTokens": 3105,
-          "totalTokens": 8910
-        },
-        "cost": 0
-      },
-      "details": {
-        "label": "JSON parsing status is valid or repaired",
-        "detail": "jsonParsingStatus=json_parsed_successfully, repairRetryCount=0"
-      }
-    },
-    "test_22_generated_clips_have_complete_7_dimension_scores": {
-      "name": "test_22_generated_clips_have_complete_7_dimension_scores",
-      "status": "passed",
-      "startedAt": "2026-11-13T06:41:40.383Z",
-      "completedAt": "2026-11-13T06:41:40.383Z",
-      "elapsedMs": 0,
-      "error": null,
-      "telemetry": {
-        "providerUsed": "nemotron",
-        "modelUsed": "nvidia/nemotron-3.5-super-vl:free",
-        "httpStatus": 200,
-        "openRouterHttpStatus": 200,
-        "latencyMs": 26333,
-        "clientElapsedMs": 36464,
-        "networkRetryCount": 0,
-        "repairRetryCount": 0,
-        "finishReason": "stop",
-        "fallbackUsed": false,
-        "openRouterRequestId": "gen-1794552072-NqBxwXsGqSkef9EvklCZ",
-        "serverRequestId": null,
-        "tokenUsage": {
-          "promptTokens": 5308,
-          "completionTokens": 3602,
-          "reasoningTokens": 3105,
-          "totalTokens": 8910
-        },
-        "cost": 0
-      },
-      "details": {
-        "label": "Generated clips have complete 7-dimension scores",
-        "detail": "scores={\"hook\":9,\"standalone\":10,\"emotion\":9,\"payoff\":9,\"share_worthy\":8,\"pacing\":10,\"visual_potential\":8,\"overall_average\":9}"
-      }
-    },
-    "test_23_extracted_clips_respect_viral_shorts_30_60s_dura": {
-      "name": "test_23_extracted_clips_respect_viral_shorts_30_60s_dura",
-      "status": "passed",
-      "startedAt": "2026-11-13T06:41:40.384Z",
-      "completedAt": "2026-11-13T06:41:40.384Z",
-      "elapsedMs": 0,
-      "error": null,
-      "telemetry": {
-        "providerUsed": "nemotron",
-        "modelUsed": "nvidia/nemotron-3.5-super-vl:free",
-        "httpStatus": 200,
-        "openRouterHttpStatus": 200,
-        "latencyMs": 26333,
-        "clientElapsedMs": 36464,
-        "networkRetryCount": 0,
-        "repairRetryCount": 0,
-        "finishReason": "stop",
-        "fallbackUsed": false,
-        "openRouterRequestId": "gen-1794552072-NqBxwXsGqSkef9EvklCZ",
-        "serverRequestId": null,
-        "tokenUsage": {
-          "promptTokens": 5308,
-          "completionTokens": 3602,
-          "reasoningTokens": 3105,
-          "totalTokens": 8910
-        },
-        "cost": 0
-      },
-      "details": {
-        "label": "Extracted clips respect Viral Shorts 30-60s duration policy",
-        "detail": "durations=35.5s, 35.5s"
-      }
-    },
-    "test_24_strict_mode_throws_error_instead_of_calling_gemi": {
-      "name": "test_24_strict_mode_throws_error_instead_of_calling_gemi",
-      "status": "passed",
-      "startedAt": "2026-11-13T06:41:40.384Z",
-      "completedAt": "2026-11-13T06:41:40.385Z",
-      "elapsedMs": 1,
       "error": null,
       "telemetry": null,
       "details": {
@@ -551,47 +259,17 @@
         "error": "Strict Nemotron Mode failed: Source video file does not exist at /tmp/non-existent-video.mp4"
       }
     },
-    "test_25_auto_fallback_mode_transparently_falls_back_to_g": {
-      "name": "test_25_auto_fallback_mode_transparently_falls_back_to_g",
+    "test_20_auto_fallback_mode_routes_to_gemini_without_fake": {
+      "name": "test_20_auto_fallback_mode_routes_to_gemini_without_fake",
       "status": "passed",
-      "startedAt": "2026-11-13T06:41:40.777Z",
-      "completedAt": "2026-11-13T06:41:40.778Z",
-      "elapsedMs": 1,
+      "startedAt": "2026-11-13T15:56:33.781Z",
+      "completedAt": "2026-11-13T15:56:33.783Z",
+      "elapsedMs": 2,
       "error": null,
-      "telemetry": {
-        "providerUsed": "gemini",
-        "modelUsed": "gemini-3.8-flash",
-        "httpStatus": 200,
-        "openRouterHttpStatus": null,
-        "latencyMs": 392,
-        "clientElapsedMs": 392,
-        "networkRetryCount": 0,
-        "repairRetryCount": 0,
-        "finishReason": null,
-        "fallbackUsed": true,
-        "openRouterRequestId": null,
-        "serverRequestId": null,
-        "tokenUsage": null,
-        "cost": null
-      },
+      "telemetry": null,
       "details": {
-        "label": "Auto fallback mode transparently falls back to Gemini when Nemotron cannot run",
-        "detail": "provider=gemini, model=gemini-3.8-flash, fallbackUsed=true, clips=2",
-        "fallbackReason": "Source video file does not exist at /tmp/non-existent-video-auto-fallback.mp4",
-        "clips": [
-          {
-            "title": "Nobody is talking about this yet, but it c...",
-            "startTime": 2,
-            "endTime": 24,
-            "duration": 22
-          },
-          {
-            "title": "Watch what happened when we didn't stop re...",
-            "startTime": 22,
-            "endTime": 49,
-            "duration": 27
-          }
-        ]
+        "label": "Auto fallback mode routes to Gemini without fake templates",
+        "detail": "Verified honest upstream Gemini 403 error propagation (no fake fallback): Auto Fallback failed: Nemotron primary failed (Source video file does not exist at /tmp/non-existent-video-auto-fallback.mp4); Gemini fallback failed (Gemini upstream API failed (HTTP 403): {\"error\":{\"code\":403,\"message\":\"The Gemini API free tier is not available for this project. To use the Gemini API, please set up billing to upgrade to the paid tier at https://aistudio.google.com/billing. For more information, see https://ai.google.dev/gemini-api/docs/troubleshooting#project-unavailable.\",\"status\":\"PERMISSION_DENIED\"}})"
       }
     }
   }

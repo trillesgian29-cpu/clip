@@ -1,0 +1,118 @@
+{
+  "reportVersion": "2.0",
+  "runId": "run-1794585332482-2325",
+  "runStatus": "completed",
+  "startedAt": "2026-11-13T15:55:32.482Z",
+  "updatedAt": "2026-11-13T15:56:22.729Z",
+  "completedAt": "2026-11-13T15:56:22.729Z",
+  "archivedPreviousReportPath": "/app/applet/reports/archive/source_grounded_download_report.2026-11-13T15-55-32-483Z.json",
+  "interruptedReason": null,
+  "metadata": {},
+  "summary": {
+    "total": 4,
+    "passed": 4,
+    "failed": 0,
+    "incomplete": 0,
+    "skipped": 0
+  },
+  "tests": {
+    "req1_metadata_and_adaptive_sampling": {
+      "name": "req1_metadata_and_adaptive_sampling",
+      "status": "passed",
+      "startedAt": "2026-11-13T15:55:40.879Z",
+      "completedAt": "2026-11-13T15:55:45.735Z",
+      "elapsedMs": 4856,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "probe": {
+          "duration": 75,
+          "width": 1280,
+          "height": 720,
+          "format": "mov,mp4,m4a,3gp,3g2,mj2",
+          "bitrate": 2359792,
+          "fps": 24,
+          "hasAudio": true
+        },
+        "sceneTransitions": [
+          25,
+          55
+        ],
+        "sampledTimestamps": [
+          9.4,
+          18.8,
+          25.8,
+          28.1,
+          37.5,
+          46.9,
+          55.8,
+          65.6
+        ]
+      }
+    },
+    "req1_interval_audio_and_visual_motion": {
+      "name": "req1_interval_audio_and_visual_motion",
+      "status": "passed",
+      "startedAt": "2026-11-13T15:55:45.738Z",
+      "completedAt": "2026-11-13T15:55:47.185Z",
+      "elapsedMs": 1447,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "activeAudio": {
+          "audioActive": true,
+          "meanVolumeDb": -16,
+          "maxVolumeDb": -11.7
+        },
+        "silentInterval": {
+          "audioActive": false,
+          "meanVolumeDb": -91,
+          "maxVolumeDb": -91
+        },
+        "activeMotion": {
+          "hasVisualProgression": true,
+          "meanPixelDeltaRatio": 0.01434
+        },
+        "frozenMotion": {
+          "hasVisualProgression": false,
+          "meanPixelDeltaRatio": 0
+        }
+      }
+    },
+    "req1_no_guessed_clips_verification": {
+      "name": "req1_no_guessed_clips_verification",
+      "status": "passed",
+      "startedAt": "2026-11-13T15:55:47.187Z",
+      "completedAt": "2026-11-13T15:55:55.187Z",
+      "elapsedMs": 8000,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "frozenRejectedReason": "Static frozen frames with no visual progression and no active audio in candidate interval.",
+        "lowConfRejectedReason": "Model confidence too low (35%) to justify selection.",
+        "mismatchRejectedReason": "Claimed quote does not match the verified transcript in this interval (token overlap 0%).",
+        "noTranscriptStatus": "uncertain",
+        "verifiedStatus": "verified"
+      }
+    },
+    "req2_permanent_download_and_active_transfer_lock": {
+      "name": "req2_permanent_download_and_active_transfer_lock",
+      "status": "passed",
+      "startedAt": "2026-11-13T15:55:55.189Z",
+      "completedAt": "2026-11-13T15:56:22.727Z",
+      "elapsedMs": 27538,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "jobId": "job-1794585360075-602",
+        "contentLength": 4832203,
+        "receivedBytes": 4832203,
+        "conflictStatusDuringTransfer": 409,
+        "serverDeleteAfterTransfer": 200,
+        "localSha256": "d845d467375fb13387aa475a514f32a9653580339d80d42063df4a331d6bd476",
+        "localDecodedDuration": 17,
+        "localResolution": "1080x1920"
+      }
+    }
+  }
+}

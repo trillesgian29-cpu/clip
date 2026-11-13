@@ -1,0 +1,239 @@
+{
+  "reportVersion": "2.0",
+  "runId": "run-1794585410603-5107",
+  "runStatus": "completed",
+  "startedAt": "2026-11-13T15:56:50.602Z",
+  "updatedAt": "2026-11-13T15:58:00.455Z",
+  "completedAt": "2026-11-13T15:58:00.455Z",
+  "archivedPreviousReportPath": "/app/applet/reports/archive/checkpoint4_security_report.2026-11-13T15-56-50-603Z.json",
+  "interruptedReason": null,
+  "metadata": {},
+  "summary": {
+    "total": 7,
+    "passed": 7,
+    "failed": 0,
+    "incomplete": 0,
+    "skipped": 0
+  },
+  "tests": {
+    "cp_final_security_auth_gates": {
+      "name": "cp_final_security_auth_gates",
+      "status": "passed",
+      "startedAt": "2026-11-13T15:56:50.604Z",
+      "completedAt": "2026-11-13T15:56:54.364Z",
+      "elapsedMs": 3760,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "liveServerPort3000UnauthRoutes401": 17,
+        "cookieAuthVerified": true,
+        "bearerAuthVerified": true,
+        "invalidIdChecksPassed": 4
+      }
+    },
+    "cp_4a_independent_batch_render_and_isolation": {
+      "name": "cp_4a_independent_batch_render_and_isolation",
+      "status": "passed",
+      "startedAt": "2026-11-13T15:57:00.194Z",
+      "completedAt": "2026-11-13T15:57:43.098Z",
+      "elapsedMs": 42904,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "jobIds": [
+          "job-1794585420199-0-3859",
+          "job-1794585420321-1-3339",
+          "job-1794585420425-2-1152",
+          "job-1794585420539-3-8942"
+        ],
+        "failedJobId": "job-1794585456311-0-5979",
+        "validExtraJobId": "job-1794585456425-1-1534"
+      }
+    },
+    "cp_4b_previews_and_range_streaming": {
+      "name": "cp_4b_previews_and_range_streaming",
+      "status": "passed",
+      "startedAt": "2026-11-13T15:57:43.101Z",
+      "completedAt": "2026-11-13T15:57:44.112Z",
+      "elapsedMs": 1011,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "previewAudit": [
+          {
+            "jobId": "job-1794585420199-0-3859",
+            "thumbBytes": 16377,
+            "headStatus": 200,
+            "get200Status": 200,
+            "range206Status": 206,
+            "range416Status": 416
+          },
+          {
+            "jobId": "job-1794585420321-1-3339",
+            "thumbBytes": 16486,
+            "headStatus": 200,
+            "get200Status": 200,
+            "range206Status": 206,
+            "range416Status": 416
+          },
+          {
+            "jobId": "job-1794585420425-2-1152",
+            "thumbBytes": 17138,
+            "headStatus": 200,
+            "get200Status": 200,
+            "range206Status": 206,
+            "range416Status": 416
+          },
+          {
+            "jobId": "job-1794585420539-3-8942",
+            "thumbBytes": 16245,
+            "headStatus": 200,
+            "get200Status": 200,
+            "range206Status": 206,
+            "range416Status": 416
+          }
+        ]
+      }
+    },
+    "cp_4c_mp4_probe_and_full_decode": {
+      "name": "cp_4c_mp4_probe_and_full_decode",
+      "status": "passed",
+      "startedAt": "2026-11-13T15:57:44.112Z",
+      "completedAt": "2026-11-13T15:57:48.633Z",
+      "elapsedMs": 4521,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "probedClips": [
+          {
+            "jobId": "job-1794585420199-0-3859",
+            "width": 1080,
+            "height": 1920,
+            "codec": "h264",
+            "audioCodec": "aac",
+            "duration": 10.08,
+            "bytes": 67670
+          },
+          {
+            "jobId": "job-1794585420321-1-3339",
+            "width": 1080,
+            "height": 1920,
+            "codec": "h264",
+            "audioCodec": "aac",
+            "duration": 12.08,
+            "bytes": 83803
+          },
+          {
+            "jobId": "job-1794585420425-2-1152",
+            "width": 1080,
+            "height": 1920,
+            "codec": "h264",
+            "audioCodec": "aac",
+            "duration": 12.08,
+            "bytes": 90236
+          },
+          {
+            "jobId": "job-1794585420539-3-8942",
+            "width": 1080,
+            "height": 1920,
+            "codec": "h264",
+            "audioCodec": "aac",
+            "duration": 11.08,
+            "bytes": 81629
+          }
+        ]
+      }
+    },
+    "cp_4d_http_download_sha256_and_decode": {
+      "name": "cp_4d_http_download_sha256_and_decode",
+      "status": "passed",
+      "startedAt": "2026-11-13T15:57:48.634Z",
+      "completedAt": "2026-11-13T15:57:53.535Z",
+      "elapsedMs": 4901,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "downloadsAudit": [
+          {
+            "jobId": "job-1794585420199-0-3859",
+            "sha256": "e72a1f210e4f2df4bc6498e3343389c16007bae0e765e52bd601c34ec93d1415",
+            "width": 1080,
+            "height": 1920,
+            "codec": "h264",
+            "audioCodec": "aac",
+            "duration": 10.08,
+            "bytes": 67670
+          },
+          {
+            "jobId": "job-1794585420321-1-3339",
+            "sha256": "a521bc79a315967cc37e4f2a7eaabb3f80d8c7bcd0daad505002cbd21538a6de",
+            "width": 1080,
+            "height": 1920,
+            "codec": "h264",
+            "audioCodec": "aac",
+            "duration": 12.08,
+            "bytes": 83803
+          },
+          {
+            "jobId": "job-1794585420425-2-1152",
+            "sha256": "30bc35e9b4d2edd2cfab393cb3f461e3b5da8ac7123b8b82fc9d00949694d556",
+            "width": 1080,
+            "height": 1920,
+            "codec": "h264",
+            "audioCodec": "aac",
+            "duration": 12.08,
+            "bytes": 90236
+          },
+          {
+            "jobId": "job-1794585420539-3-8942",
+            "sha256": "da79f1938d2ef6942728253f67c5db157576dfa1cfba0ecb655d2b7493d34f70",
+            "width": 1080,
+            "height": 1920,
+            "codec": "h264",
+            "audioCodec": "aac",
+            "duration": 11.08,
+            "bytes": 81629
+          }
+        ]
+      }
+    },
+    "cp_4a_restart_persistence": {
+      "name": "cp_4a_restart_persistence",
+      "status": "passed",
+      "startedAt": "2026-11-13T15:57:53.537Z",
+      "completedAt": "2026-11-13T15:57:58.802Z",
+      "elapsedMs": 5265,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "oldPid": 7050,
+        "newPid": 7386,
+        "sessionSurvivedRestart": true,
+        "persistedCompletedJobs": 4,
+        "persistedFailedJob": "job-1794585456311-0-5979"
+      }
+    },
+    "cp_4d_4e_delete_isolation_and_local_independence": {
+      "name": "cp_4d_4e_delete_isolation_and_local_independence",
+      "status": "passed",
+      "startedAt": "2026-11-13T15:57:58.803Z",
+      "completedAt": "2026-11-13T15:58:00.454Z",
+      "elapsedMs": 1651,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "deletedJobId": "job-1794585420199-0-3859",
+        "localDecodedAfterServerDelete": {
+          "width": 1080,
+          "height": 1920,
+          "codec": "h264",
+          "audioCodec": "aac",
+          "duration": 10.08,
+          "bytes": 67670
+        },
+        "unrelatedRendersVerifiedIntact": 3,
+        "preExistingRendersPreserved": 10
+      }
+    }
+  }
+}

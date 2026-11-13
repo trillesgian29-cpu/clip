@@ -1,0 +1,92 @@
+{
+  "reportVersion": "2.0",
+  "runId": "run-1794585135135-741",
+  "runStatus": "running",
+  "startedAt": "2026-11-13T15:52:15.135Z",
+  "updatedAt": "2026-11-13T15:52:35.536Z",
+  "completedAt": null,
+  "archivedPreviousReportPath": "/app/applet/reports/archive/source_grounded_download_report.2026-11-13T15-52-15-136Z.json",
+  "interruptedReason": null,
+  "metadata": {},
+  "summary": {
+    "total": 3,
+    "passed": 2,
+    "failed": 1,
+    "incomplete": 0,
+    "skipped": 0
+  },
+  "tests": {
+    "req1_metadata_and_adaptive_sampling": {
+      "name": "req1_metadata_and_adaptive_sampling",
+      "status": "passed",
+      "startedAt": "2026-11-13T15:52:22.350Z",
+      "completedAt": "2026-11-13T15:52:27.527Z",
+      "elapsedMs": 5177,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "probe": {
+          "duration": 75,
+          "width": 1280,
+          "height": 720,
+          "format": "mov,mp4,m4a,3gp,3g2,mj2",
+          "bitrate": 267984,
+          "fps": 24,
+          "hasAudio": true
+        },
+        "sceneTransitions": [
+          25,
+          55
+        ],
+        "sampledTimestamps": [
+          9.4,
+          18.8,
+          25.8,
+          28.1,
+          37.5,
+          46.9,
+          55.8,
+          65.6
+        ]
+      }
+    },
+    "req1_interval_audio_and_visual_motion": {
+      "name": "req1_interval_audio_and_visual_motion",
+      "status": "passed",
+      "startedAt": "2026-11-13T15:52:27.529Z",
+      "completedAt": "2026-11-13T15:52:28.888Z",
+      "elapsedMs": 1359,
+      "error": null,
+      "telemetry": null,
+      "details": {
+        "activeAudio": {
+          "audioActive": true,
+          "meanVolumeDb": -16,
+          "maxVolumeDb": -11.7
+        },
+        "silentInterval": {
+          "audioActive": false,
+          "meanVolumeDb": -91,
+          "maxVolumeDb": -91
+        },
+        "activeMotion": {
+          "hasVisualProgression": true,
+          "meanPixelDeltaRatio": 0.00086
+        },
+        "frozenMotion": {
+          "hasVisualProgression": false,
+          "meanPixelDeltaRatio": 0.00001
+        }
+      }
+    },
+    "req1_no_guessed_clips_verification": {
+      "name": "req1_no_guessed_clips_verification",
+      "status": "failed",
+      "startedAt": "2026-11-13T15:52:28.888Z",
+      "completedAt": "2026-11-13T15:52:35.535Z",
+      "elapsedMs": 6647,
+      "error": "ASSERTION FAILED: Expected 'verified', got {\"accepted\":true,\"verificationStatus\":\"uncertain\",\"uncertaintyNote\":\"Minimal visual pixel motion detected across interval (relies primarily on audio track).\",\"checks\":{\"boundsValid\":true,\"decodable\":true,\"visualDetailValid\":true,\"visualMotionDetected\":false,\"audioIntervalActive\":true,\"transcriptAligned\":true,\"editorialDurationValid\":true,\"confidenceReported\":true}}",
+      "telemetry": null
+    }
+  }
+}

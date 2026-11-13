@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Sparkles,
   Sliders,
@@ -49,18 +49,48 @@ export const AiAnalysisPanel: React.FC<AiAnalysisPanelProps> = ({
   const [transcript, setTranscript] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [analysisStep, setAnalysisStep] = useState<string>('');
+  const [analysisError, setAnalysisError] = useState<{
+    message: string;
+    quotaExhausted?: boolean;
+    resetAt?: string;
+    statusCode?: number;
+  } | null>(null);
   const [localAudit, setLocalAudit] = useState<AnalysisAuditReport | null>(lastAudit || null);
+  const stepTimersRef = useRef<number[]>([]);
+
+  const clearStepTimers = () => {
+    for (const id of stepTimersRef.current) {
+      window.clearTimeout(id);
+    }
+    stepTimersRef.current = [];
+  };
+
+  useEffect(() => {
+    return () => clearStepTimers();
+  }, []);
 
   const handleStartAnalysis = async () => {
+    clearStepTimers();
     setIsAnalyzing(true);
+    setAnalysisError(null);
     setAnalysisStep('Pre-flight scan: Validating content & inspecting for color bars/black screens...');
 
     try {
       if (preferredProvider === 'strict_nemotron' || preferredProvider === 'auto_fallback') {
-        setTimeout(() => setAnalysisStep('Contacting OpenRouter (nvidia/nemotron-3.5-super-vl:free)...'), 800);
-        setTimeout(() => setAnalysisStep('Nemotron analyzing visual hook, retention curve & 7-dimension scoring...'), 2200);
+        stepTimersRef.current.push(
+          window.setTimeout(
+            () => setAnalysisStep('Contacting OpenRouter (nvidia/nemotron-3.5-super-vl:free)...'),
+            800
+          ),
+          window.setTimeout(
+            () => setAnalysisStep('Nemotron analyzing visual hook, retention curve & 7-dimension scoring...'),
+            2200
+          )
+        );
       } else {
-        setTimeout(() => setAnalysisStep('Analyzing with Google Gemini 3.8 Flash...'), 800);
+        stepTimersRef.current.push(
+          window.setTimeout(() => setAnalysisStep('Analyzing with Google Gemini 3.8 Flash...'), 800)
+        );
       }
 
       const result = await api.analyzeVideo({
@@ -79,20 +109,34 @@ export const AiAnalysisPanel: React.FC<AiAnalysisPanelProps> = ({
         chunkOffsetSeconds,
       });
 
+      clearStepTimers();
       setAnalysisStep('Applying content-first filters & validating timestamps...');
 
       if (result.audit) {
         setLocalAudit(result.audit);
       }
 
-      setTimeout(() => {
-        onClipsGenerated(result.clips, result.audit);
-        setIsAnalyzing(false);
-        setAnalysisStep('');
-      }, 600);
+      stepTimersRef.current.push(
+        window.setTimeout(() => {
+          onClipsGenerated(result.clips, result.audit);
+          setIsAnalyzing(false);
+          setAnalysisStep('');
+        }, 600)
+      );
     } catch (error) {
-      console.error('AI analysis error:', error);
-      alert(`AI Analysis failed: ${(error as Error).message}`);
+      clearStepTimers();
+      const errObj = error as Error & {
+        quotaExhausted?: boolean;
+        resetAt?: string;
+        statusCode?: number;
+      };
+      console.error('AI analysis error:', errObj);
+      setAnalysisError({
+        message: errObj.message || 'AI analysis failed',
+        quotaExhausted: errObj.quotaExhausted,
+        resetAt: errObj.resetAt,
+        statusCode: errObj.statusCode,
+      });
       setIsAnalyzing(false);
       setAnalysisStep('');
     }
@@ -367,6 +411,37 @@ export const AiAnalysisPanel: React.FC<AiAnalysisPanelProps> = ({
           <div className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-neutral-950 border border-emerald-500/30 py-2.5 px-3 text-xs text-emerald-300">
             <Loader2 className="h-4 w-4 animate-spin text-emerald-400" />
             <span className="font-medium animate-pulse">{analysisStep}</span>
+          </div>
+        )}
+
+        {analysisError && !isAnalyzing && (
+          <div
+            className={`mt-3 flex items-start gap-2 rounded-xl border p-3 text-xs ${
+              analysisError.quotaExhausted || analysisError.statusCode === 429
+                ? 'border-amber-500/40 bg-amber-950/30 text-amber-200'
+                : 'border-red-500/30 bg-red-950/30 text-red-300'
+            }`}
+          >
+            <ShieldAlert
+              className={`h-4 w-4 flex-shrink-0 mt-0.5 ${
+                analysisError.quotaExhausted || analysisError.statusCode === 429 ? 'text-amber-400' : 'text-red-400'
+              }`}
+            />
+            <div className="space-y-1">
+              <span className="font-semibold block">
+                {analysisError.quotaExhausted
+                  ? 'OpenRouter Free-Tier Daily Quota Exhausted'
+                  : analysisError.statusCode === 429
+                  ? 'OpenRouter Short-Term Rate Limit Reached'
+                  : 'AI Analysis Failed'}
+              </span>
+              <span className="block">{analysisError.message}</span>
+              {analysisError.resetAt && (
+                <span className="block text-[11px] font-mono opacity-85">
+                  Quota reset window: {new Date(analysisError.resetAt).toLocaleString()}
+                </span>
+              )}
+            </div>
           </div>
         )}
       </div>

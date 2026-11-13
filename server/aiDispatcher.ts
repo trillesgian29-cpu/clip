@@ -53,6 +53,14 @@ export interface DispatcherResult {
   hasInsufficientContent: boolean;
   analysisSummary?: string;
   transcriptVerification?: TranscriptVerificationInfo;
+  sourceMetadata?: {
+    width: number;
+    height: number;
+    fps?: number;
+    format: string;
+    hasAudio: boolean;
+    bitrate?: number;
+  };
 }
 
 /**
@@ -151,11 +159,16 @@ export async function dispatchVideoAnalysis(
         hasInsufficientContent: nemotronResult.hasInsufficientContent,
         analysisSummary: nemotronResult.analysisSummary,
         transcriptVerification: nemotronResult.transcriptVerification,
+        sourceMetadata: nemotronResult.sourceMetadata,
       };
     } catch (nemotronError) {
       // In STRICT mode, NEVER silently switch to Gemini!
       console.error('[AI Dispatcher] Strict Nemotron Mode failed:', (nemotronError as Error).message);
-      throw new Error(`Strict Nemotron Mode failed: ${(nemotronError as Error).message}`);
+      const wrapped = new Error(`Strict Nemotron Mode failed: ${(nemotronError as Error).message}`);
+      (wrapped as any).statusCode = (nemotronError as any)?.statusCode;
+      (wrapped as any).isDailyQuotaExhausted = (nemotronError as any)?.isDailyQuotaExhausted;
+      (wrapped as any).rateLimitResetAt = (nemotronError as any)?.rateLimitResetAt;
+      throw wrapped;
     }
   }
 
@@ -204,6 +217,7 @@ export async function dispatchVideoAnalysis(
           hasInsufficientContent: nemotronResult.hasInsufficientContent,
           analysisSummary: nemotronResult.analysisSummary,
           transcriptVerification: nemotronResult.transcriptVerification,
+          sourceMetadata: nemotronResult.sourceMetadata,
         };
       } catch (nemotronError) {
         console.warn(
@@ -212,9 +226,13 @@ export async function dispatchVideoAnalysis(
         );
 
         if (!hasGemini) {
-          throw new Error(
+          const wrapped = new Error(
             `Nemotron failed (${(nemotronError as Error).message}) and Gemini fallback is unconfigured.`
           );
+          (wrapped as any).statusCode = (nemotronError as any)?.statusCode;
+          (wrapped as any).isDailyQuotaExhausted = (nemotronError as any)?.isDailyQuotaExhausted;
+          (wrapped as any).rateLimitResetAt = (nemotronError as any)?.rateLimitResetAt;
+          throw wrapped;
         }
 
         // Graceful transparent fallback to Gemini

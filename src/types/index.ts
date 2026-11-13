@@ -34,11 +34,30 @@ export interface StoryStructure {
   payoff: string;
 }
 
+export type VerificationStatus = 'verified' | 'uncertain' | 'rejected';
+
+export interface CandidateVerificationChecks {
+  boundsValid: boolean;
+  decodable: boolean;
+  visualDetailValid: boolean;
+  visualMotionDetected: boolean;
+  audioIntervalActive?: boolean;
+  transcriptAligned: boolean;
+  editorialDurationValid: boolean;
+  confidenceReported: boolean;
+}
+
 export interface ClipSuggestion {
   id: string;
   title: string;
   hook: string;
   description: string;
+  factualDescription?: string;
+  visualEvidence?: string;
+  audioEvidence?: string;
+  uncertaintyNote?: string;
+  verificationStatus?: VerificationStatus;
+  verificationChecks?: CandidateVerificationChecks;
   startTime: number; // seconds (global)
   endTime: number; // seconds (global)
   duration: number; // seconds
@@ -178,6 +197,14 @@ export interface AnalysisAuditReport {
   hasInsufficientContent?: boolean;
   analysisSummary?: string;
   transcriptVerification?: TranscriptVerificationInfo;
+  sourceVideoMetadata?: {
+    width: number;
+    height: number;
+    fps?: number;
+    format: string;
+    hasAudio: boolean;
+    bitrate?: number;
+  };
 }
 
 export interface JobQueueCounts {
