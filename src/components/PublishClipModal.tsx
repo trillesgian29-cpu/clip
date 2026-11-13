@@ -37,7 +37,7 @@ export const PublishClipModal: React.FC<PublishClipModalProps> = ({
   if (!isOpen || !clip) return null;
 
   const [platform, setPlatform] = useState<'tiktok' | 'reels' | 'shorts' | 'facebook' | 'all'>(
-    (clip.publishedPlatform as any) || 'tiktok'
+    (clip.publishedPlatform as any) || (clip.targetPlatform as any) || 'tiktok'
   );
   const [postTitle, setPostTitle] = useState(clip.title);
   const [postHook, setPostHook] = useState(clip.hook);

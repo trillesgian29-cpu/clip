@@ -14,6 +14,7 @@ import {
 import { analyzeVideoWithGemini, validateClipTimestampsAndQuote } from './server/gemini.ts';
 import { dispatchVideoAnalysis } from './server/aiDispatcher.ts';
 import { isOpenRouterConfigured, NEMOTRON_MODEL } from './server/nemotron.ts';
+import { scanVideoQualityReport } from './server/contentQualityInspector.ts';
 import {
   createSessionToken,
   verifyPasscode,
@@ -505,48 +506,117 @@ app.post('/api/videos/upload', upload.single('video'), async (req: Request, res:
 app.post('/api/videos/sample', async (req: Request, res: Response) => {
   try {
     const { sampleType = 'podcast' } = req.body;
-    const videoId = `sample-${sampleType}-${Date.now()}`;
+    const normType = sampleType === 'glitch' ? 'technical_glitch' : sampleType;
+    const videoId = `sample-${normType}-${Date.now()}`;
     const filename = `${videoId}.mp4`;
     const filepath = path.join(SAMPLES_DIR, filename);
 
-    // Create a real video using FFmpeg test filters if not yet generated
-    // This produces a genuine high-definition MP4 file with audio tones and timer overlay
     let title = 'Podcast Masterclass: Building Tech in 2026';
-    let duration = 65; // 65 seconds long-form video
-
-    if (sampleType === 'keynote') {
-      title = 'AI Revolution Keynote: The Future of Automation';
-      duration = 80;
-    } else if (sampleType === 'gaming') {
-      title = 'Pro Gameplay: Championship Final Climax';
-      duration = 50;
-    }
-
-    // Generate real video using FFmpeg
-    const ffmpegCmd = [
-      '-f', 'lavfi',
-      '-i', `testsrc=duration=${duration}:size=1920x1080:rate=30`,
-      '-f', 'lavfi',
-      '-i', `sine=frequency=440:duration=${duration}`,
-      '-vf', `drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='ClipGenius Source\\: ${title}':x=80:y=80:fontsize=48:fontcolor=white:box=1:boxcolor=black@0.6,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:text='Time\\: %{pts\\:hms}':x=80:y=160:fontsize=36:fontcolor=yellow:box=1:boxcolor=black@0.6`,
-      '-c:v', 'libx264',
-      '-preset', 'ultrafast',
-      '-c:a', 'aac',
-      '-pix_fmt', 'yuv420p',
-      '-movflags', '+faststart',
-      '-y',
-      filepath,
-    ];
+    let duration = 65;
 
     const { spawn } = await import('child_process');
-    await new Promise((resolve, reject) => {
-      const child = spawn('ffmpeg', ffmpegCmd);
-      child.on('close', (code) => {
-        if (code === 0) resolve(true);
-        else reject(new Error(`Sample generation exited with code ${code}`));
+
+    async function runFfmpegCmd(args: string[]): Promise<void> {
+      return new Promise((resolve, reject) => {
+        const child = spawn('ffmpeg', args);
+        let stderr = '';
+        child.stderr?.on('data', (d) => {
+          stderr += d.toString();
+          if (stderr.length > 10000) stderr = stderr.slice(-8000);
+        });
+        child.on('close', (code) => {
+          if (code === 0) resolve();
+          else reject(new Error(`FFmpeg exited with code ${code}: ${stderr.slice(-600)}`));
+        });
+        child.on('error', reject);
       });
-      child.on('error', reject);
-    });
+    }
+
+    if (normType === 'technical_glitch') {
+      title = 'Broadcast Stream: SMPTE Test Pattern, Blackout & Keynote';
+      duration = 65; // 15s SMPTE bars + 5s black + 45s keynote speech
+
+      const fontBold = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf';
+      const fontReg = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf';
+
+      const filterComplex = [
+        `[0:v]drawtext=fontfile=${fontBold}:text='SMPTE COLOR BARS CALIBRATION (LOW-VALUE)':x=80:y=80:fontsize=44:fontcolor=white:box=1:boxcolor=black@0.7,drawtext=fontfile=${fontReg}:text='Status\\: Pre-broadcast test signal (00\\:00 - 00\\:15)':x=80:y=150:fontsize=32:fontcolor=yellow:box=1:boxcolor=black@0.7[v0]`,
+        `[2:v]drawtext=fontfile=${fontBold}:text='BLACK SCREEN (TECHNICAL INTERRUPTION)':x=80:y=80:fontsize=44:fontcolor=gray:box=1:boxcolor=black@0.7,drawtext=fontfile=${fontReg}:text='Status\\: No signal / blank transition (00\\:15 - 00\\:20)':x=80:y=150:fontsize=32:fontcolor=gray:box=1:boxcolor=black@0.7[v1]`,
+        `[4:v]drawtext=fontfile=${fontBold}:text='KEYNOTE SPEECH\\: AI TRANSFORMATION (HIGH-VALUE)':x=80:y=80:fontsize=44:fontcolor=white:box=1:boxcolor=black@0.7,drawtext=fontfile=${fontReg}:text='Speaker\\: The future belongs to creators who master curation.':x=80:y=150:fontsize=32:fontcolor=yellow:box=1:boxcolor=black@0.7,drawtext=fontfile=${fontReg}:text='Time\\: %{pts\\:hms}':x=80:y=220:fontsize=28:fontcolor=cyan:box=1:boxcolor=black@0.7[v2]`,
+        `[v0][1:a][v1][3:a][v2][5:a]concat=n=3:v=1:a=1[v][a]`,
+      ].join(';');
+
+      const ffmpegCmd = [
+        '-f', 'lavfi', '-i', 'smptebars=duration=15:size=1920x1080:rate=30',
+        '-f', 'lavfi', '-i', 'sine=frequency=1000:duration=15',
+        '-f', 'lavfi', '-i', 'color=c=black:size=1920x1080:duration=5:rate=30',
+        '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo:d=5',
+        '-f', 'lavfi', '-i', 'color=c=#1e1b4b:size=1920x1080:duration=45:rate=30',
+        '-f', 'lavfi', '-i', 'aevalsrc=sin(260*2*PI*t)*0.25+sin(520*2*PI*t)*0.15:d=45',
+        '-filter_complex', filterComplex,
+        '-map', '[v]', '-map', '[a]',
+        '-c:v', 'libx264', '-profile:v', 'high', '-level', '4.1', '-preset', 'ultrafast',
+        '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac', '-b:a', '128k',
+        '-movflags', '+faststart',
+        '-y', filepath,
+      ];
+
+      await runFfmpegCmd(ffmpegCmd);
+    } else if (normType === 'educational' || normType === 'keynote') {
+      title = 'Educational Documentary: System Design at Scale';
+      duration = 80;
+
+      const fontBold = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf';
+      const fontReg = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf';
+
+      const vf = [
+        `drawtext=fontfile=${fontBold}:text='DOCUMENTARY\\: SYSTEM DESIGN AT SCALE':x=80:y=80:fontsize=46:fontcolor=white:box=1:boxcolor=black@0.6`,
+        `drawtext=fontfile=${fontReg}:text='Chapter\\: Resumable Ingestion & Concurrency Guardrails':x=80:y=150:fontsize=32:fontcolor=cyan:box=1:boxcolor=black@0.6`,
+        `drawtext=fontfile=${fontReg}:text='Insight\\: True scalability means zero dropped jobs during load spikes.':x=80:y=220:fontsize=30:fontcolor=yellow:box=1:boxcolor=black@0.6`,
+        `drawtext=fontfile=${fontReg}:text='Timecode\\: %{pts\\:hms}':x=80:y=290:fontsize=28:fontcolor=white:box=1:boxcolor=black@0.6`,
+      ].join(',');
+
+      const ffmpegCmd = [
+        '-f', 'lavfi', '-i', `color=c=#0a192f:size=1920x1080:duration=${duration}:rate=30`,
+        '-f', 'lavfi', '-i', `aevalsrc=sin(330*2*PI*t)*0.2+sin(550*2*PI*t)*0.1:d=${duration}`,
+        '-vf', vf,
+        '-c:v', 'libx264', '-profile:v', 'high', '-level', '4.1', '-preset', 'ultrafast',
+        '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac', '-b:a', '128k',
+        '-movflags', '+faststart',
+        '-y', filepath,
+      ];
+
+      await runFfmpegCmd(ffmpegCmd);
+    } else {
+      // Default: Podcast / Interview Masterclass
+      title = 'Podcast Masterclass: Building Tech in 2026';
+      duration = 65;
+
+      const fontBold = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf';
+      const fontReg = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf';
+
+      const vf = [
+        `drawtext=fontfile=${fontBold}:text='TECH LEADERS PODCAST #42':x=80:y=80:fontsize=48:fontcolor=white:box=1:boxcolor=black@0.6`,
+        `drawtext=fontfile=${fontReg}:text='Host\\: What separates viral clips from forgettable clips?':x=80:y=150:fontsize=32:fontcolor=yellow:box=1:boxcolor=black@0.6`,
+        `drawtext=fontfile=${fontReg}:text='Guest\\: Curiosity gaps, punchy payoffs, and clean sound.':x=80:y=220:fontsize=32:fontcolor=cyan:box=1:boxcolor=black@0.6`,
+        `drawtext=fontfile=${fontReg}:text='Timecode\\: %{pts\\:hms}':x=80:y=290:fontsize=28:fontcolor=white:box=1:boxcolor=black@0.6`,
+      ].join(',');
+
+      const ffmpegCmd = [
+        '-f', 'lavfi', '-i', `color=c=#0f172a:size=1920x1080:duration=${duration}:rate=30`,
+        '-f', 'lavfi', '-i', `aevalsrc=sin(220*2*PI*t)*0.25+sin(440*2*PI*t)*0.15:d=${duration}`,
+        '-vf', vf,
+        '-c:v', 'libx264', '-profile:v', 'high', '-level', '4.1', '-preset', 'ultrafast',
+        '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac', '-b:a', '128k',
+        '-movflags', '+faststart',
+        '-y', filepath,
+      ];
+
+      await runFfmpegCmd(ffmpegCmd);
+    }
 
     const probe = await probeVideo(filepath);
     const thumbFilename = `thumb-${videoId}.jpg`;
@@ -785,26 +855,94 @@ app.get('/api/thumbnails/clip/:sourceVideoId', async (req: Request, res: Respons
 // -------------------------------------------------------------
 // API: AI CLIP ANALYSIS (NVIDIA NEMOTRON 3.5 SUPER VL + GEMINI FALLBACK)
 // -------------------------------------------------------------
-app.post('/api/ai/analyze', async (req: Request, res: Response) => {
-  try {
-    const {
-      videoId,
-      preferredProvider,
-      clipCount = 3,
-      clipStyle = 'viral_shorts',
-      customPrompt,
-      transcript,
-      videoCategory,
-      targetAudience,
-      targetPlatforms,
-      chunkName,
-      chunkOffsetSeconds,
-      previouslySelectedClips,
-      privacyConsent,
-    } = req.body;
+const AI_LIFECYCLE_LOG_PATH = '/tmp/clipgenius_ai_analyze.log';
 
+function logAiLifecycle(event: string, requestId: string, details: Record<string, unknown>) {
+  const entry = {
+    ts: new Date().toISOString(),
+    event,
+    requestId,
+    ...details,
+  };
+  const line = `[AI Lifecycle] ${JSON.stringify(entry)}`;
+  if (event.includes('ERROR') || event.includes('ABORTED') || event.includes('CLOSED')) {
+    console.error(line);
+  } else {
+    console.log(line);
+  }
+  try {
+    fs.appendFileSync(AI_LIFECYCLE_LOG_PATH, `${line}\n`, 'utf8');
+  } catch {
+    // Non-fatal diagnostic file append
+  }
+}
+
+app.post(['/api/ai/analyze', '/api/analyze'], async (req: Request, res: Response) => {
+  const reqId = `ai-${Date.now()}-${Math.round(Math.random() * 1000)}`;
+  const reqStartMs = Date.now();
+  let clientAborted = false;
+
+  const {
+    videoId,
+    preferredProvider = 'auto_fallback',
+    clipCount = 3,
+    clipStyle = 'viral_shorts',
+    editorialStyle,
+    customPrompt,
+    creatorDirection,
+    transcript,
+    videoCategory,
+    targetAudience,
+    targetPlatforms,
+    chunkName,
+    chunkOffsetSeconds,
+    previouslySelectedClips,
+    privacyConsent,
+  } = req.body;
+
+  const effectiveStyle = editorialStyle || clipStyle;
+  const effectiveDirection = creatorDirection || customPrompt;
+
+  logAiLifecycle('REQUEST_START', reqId, {
+    route: req.path,
+    videoId,
+    preferredProvider,
+    editorialStyle: effectiveStyle,
+    clipCount: Number(clipCount) || 3,
+  });
+
+  req.on('aborted', () => {
+    clientAborted = true;
+    logAiLifecycle('CLIENT_ABORTED', reqId, {
+      route: req.path,
+      elapsedMs: Date.now() - reqStartMs,
+      headersSent: res.headersSent,
+    });
+  });
+
+  res.on('close', () => {
+    if (!res.writableFinished) {
+      logAiLifecycle('SOCKET_CLOSED_BEFORE_FINISH', reqId, {
+        route: req.path,
+        elapsedMs: Date.now() - reqStartMs,
+        headersSent: res.headersSent,
+        clientAborted,
+      });
+    }
+  });
+
+  res.on('finish', () => {
+    logAiLifecycle('RESPONSE_FINISHED', reqId, {
+      route: req.path,
+      statusCode: res.statusCode,
+      elapsedMs: Date.now() - reqStartMs,
+    });
+  });
+
+  try {
     const video = videosRegistry.get(videoId);
     if (!video || !fs.existsSync(video.filepath)) {
+      logAiLifecycle('VIDEO_NOT_FOUND', reqId, { videoId, statusCode: 404 });
       return res.status(404).json({ error: 'Source video not found on disk' });
     }
 
@@ -815,8 +953,10 @@ app.post('/api/ai/analyze', async (req: Request, res: Response) => {
       filename: video.originalName,
       duration: video.duration,
       clipCount: Number(clipCount) || 3,
-      clipStyle,
-      customPrompt,
+      clipStyle: effectiveStyle,
+      editorialStyle: effectiveStyle,
+      customPrompt: effectiveDirection,
+      creatorDirection: effectiveDirection,
       transcript,
       videoCategory,
       targetAudience,
@@ -827,17 +967,67 @@ app.post('/api/ai/analyze', async (req: Request, res: Response) => {
       previouslySelectedClips: Array.isArray(previouslySelectedClips) ? previouslySelectedClips : [],
     });
 
+    const audit = {
+      requestedProvider: result.requestedProvider,
+      actualProvider: result.providerUsed,
+      actualModel: result.modelUsed,
+      fallbackUsed: result.fallbackUsed,
+      fallbackReason: result.fallbackReason,
+      openRouterDetails: result.openRouterDetails,
+      rejectedMoments: result.rejectedMoments || [],
+      editorialStyle: result.editorialStyleUsed,
+      editorialPolicy: result.editorialPolicy,
+      creatorDirection: result.creatorDirectionUsed,
+      analyzedAt: new Date().toISOString(),
+      jsonParsingStatus: result.openRouterDetails?.jsonParsingStatus,
+      repairRetryCount: result.openRouterDetails?.repairRetryCount ?? 0,
+      networkRetryCount: result.openRouterDetails?.networkRetryCount ?? 0,
+      hasInsufficientContent: result.hasInsufficientContent,
+      analysisSummary: result.analysisSummary,
+      transcriptVerification: result.transcriptVerification,
+    };
+
+    logAiLifecycle('DISPATCH_SUCCESS', reqId, {
+      providerUsed: result.providerUsed,
+      modelUsed: result.modelUsed,
+      fallbackUsed: result.fallbackUsed,
+      openRouterRequestId: result.openRouterDetails?.requestId,
+      openRouterHttpStatus: result.openRouterDetails?.httpStatus,
+      finishReason: result.openRouterDetails?.finishReason,
+      networkRetryCount: result.openRouterDetails?.networkRetryCount ?? 0,
+      repairRetryCount: result.openRouterDetails?.repairRetryCount ?? 0,
+      clipsCount: result.clips.length,
+      rejectedCount: result.rejectedMoments?.length ?? 0,
+      elapsedMs: Date.now() - reqStartMs,
+    });
+
     return res.json({
       success: true,
+      requestId: reqId,
       clips: result.clips,
       providerUsed: result.providerUsed,
       modelUsed: result.modelUsed,
+      fallbackUsed: result.fallbackUsed,
+      fallbackReason: result.fallbackReason,
+      openRouterDetails: result.openRouterDetails,
+      rejectedMoments: result.rejectedMoments,
+      editorialStyleUsed: result.editorialStyleUsed,
+      editorialPolicy: result.editorialPolicy,
+      creatorDirectionUsed: result.creatorDirectionUsed,
       stagesCompleted: result.stagesCompleted,
+      hasInsufficientContent: result.hasInsufficientContent,
+      analysisSummary: result.analysisSummary,
+      transcriptVerification: result.transcriptVerification,
+      audit,
       sourceVideo: video,
     });
   } catch (error) {
-    console.error('AI Analysis failed:', error);
-    return res.status(500).json({ error: (error as Error).message });
+    const errMsg = (error as Error).message;
+    logAiLifecycle('DISPATCH_ERROR', reqId, {
+      error: errMsg,
+      elapsedMs: Date.now() - reqStartMs,
+    });
+    return res.status(500).json({ error: errMsg, requestId: reqId });
   }
 });
 
@@ -962,6 +1152,186 @@ app.post('/api/clips/render', async (req: Request, res: Response) => {
   }
 });
 
+// Atomic batch rendering for multiple clips
+app.post('/api/clips/batch-render', async (req: Request, res: Response) => {
+  try {
+    const { clips, defaultAspectRatio = '9:16' } = req.body;
+    if (!Array.isArray(clips) || clips.length === 0) {
+      return res.status(400).json({ error: 'No clips provided for batch rendering' });
+    }
+
+    const jobs: RenderJob[] = [];
+
+    for (const clip of clips) {
+      const sourceVideoId = clip.sourceVideoId;
+      const video = videosRegistry.get(sourceVideoId);
+      if (!video || !fs.existsSync(video.filepath)) {
+        continue;
+      }
+
+      const jobId = `job-${Date.now()}-${Math.round(Math.random() * 10000)}`;
+      const clipAspect = (clip.aspectRatio || defaultAspectRatio || '9:16') as '9:16' | '1:1' | '16:9';
+      const outputFilename = `clip-${jobId}-${clipAspect.replace(':', 'x')}.mp4`;
+      const outputPath = path.join(RENDERED_DIR, outputFilename);
+
+      const safeStart = Math.max(0, parseFloat(clip.startTime) || 0);
+      const safeEnd = Math.min(video.duration, parseFloat(clip.endTime) || safeStart + 30);
+      const targetDuration = Math.max(0.5, safeEnd - safeStart);
+
+      const renderJob: RenderJob = {
+        id: jobId,
+        clipId: clip.clipId || clip.id || jobId,
+        title: clip.title || `Viral Clip (${clipAspect})`,
+        sourceVideoId,
+        startTime: safeStart,
+        endTime: safeEnd,
+        aspectRatio: clipAspect,
+        status: 'queued',
+        progress: 0,
+        outputFilename,
+        outputPath,
+        downloadUrl: `/api/clips/download/${jobId}`,
+        duration: Math.round(targetDuration * 10) / 10,
+        createdAt: new Date().toISOString(),
+      };
+
+      renderJobsRegistry.set(jobId, renderJob);
+      jobs.push(renderJob);
+
+      enqueueJob({
+        id: jobId,
+        type: 'render',
+        status: 'queued',
+        progress: 0,
+        createdAt: Date.now(),
+        task: async () => {
+          const currentJob = renderJobsRegistry.get(jobId);
+          if (currentJob) {
+            currentJob.status = 'rendering';
+          }
+
+          try {
+            await renderClip({
+              sourcePath: video.filepath,
+              outputPath,
+              startTime: safeStart,
+              endTime: safeEnd,
+              aspectRatio: renderJob.aspectRatio,
+              onProgress: (percent) => {
+                const j = renderJobsRegistry.get(jobId);
+                if (j) j.progress = percent;
+              },
+            });
+
+            const j = renderJobsRegistry.get(jobId);
+            if (j) {
+              j.status = 'completed';
+              j.progress = 100;
+              j.completedAt = new Date().toISOString();
+              if (fs.existsSync(outputPath)) {
+                j.fileSize = fs.statSync(outputPath).size;
+              }
+              await saveRenderJobRecord(j);
+            }
+          } catch (err) {
+            console.error(`Batch render error for job ${jobId}:`, err);
+            const j = renderJobsRegistry.get(jobId);
+            if (j) {
+              j.status = 'failed';
+              j.error = (err as Error).message;
+            }
+            throw err;
+          }
+        },
+      });
+    }
+
+    return res.status(202).json({
+      success: true,
+      count: jobs.length,
+      jobs,
+    });
+  } catch (error) {
+    console.error('Batch rendering dispatch failed:', error);
+    return res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// Retry a failed render job
+app.post('/api/clips/retry/:jobId', async (req: Request, res: Response) => {
+  try {
+    const { jobId } = req.params;
+    const job = renderJobsRegistry.get(jobId);
+    if (!job) {
+      return res.status(404).json({ error: 'Render job not found' });
+    }
+
+    const video = videosRegistry.get(job.sourceVideoId);
+    if (!video || !fs.existsSync(video.filepath)) {
+      return res.status(404).json({ error: 'Source video not found on disk' });
+    }
+
+    job.status = 'queued';
+    job.progress = 0;
+    job.error = undefined;
+
+    enqueueJob({
+      id: jobId,
+      type: 'render',
+      status: 'queued',
+      progress: 0,
+      createdAt: Date.now(),
+      task: async () => {
+        job.status = 'rendering';
+        try {
+          await renderClip({
+            sourcePath: video.filepath,
+            outputPath: job.outputPath!,
+            startTime: job.startTime,
+            endTime: job.endTime,
+            aspectRatio: job.aspectRatio,
+            onProgress: (percent) => {
+              job.progress = percent;
+            },
+          });
+
+          job.status = 'completed';
+          job.progress = 100;
+          job.completedAt = new Date().toISOString();
+          if (fs.existsSync(job.outputPath!)) {
+            job.fileSize = fs.statSync(job.outputPath!).size;
+          }
+          await saveRenderJobRecord(job);
+        } catch (err) {
+          job.status = 'failed';
+          job.error = (err as Error).message;
+          throw err;
+        }
+      },
+    });
+
+    return res.json({ success: true, message: 'Job re-queued for rendering', job });
+  } catch (error) {
+    return res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// Video Content Quality Inspector report
+app.get('/api/quality/inspect/:videoId', async (req: Request, res: Response) => {
+  try {
+    const { videoId } = req.params;
+    const video = videosRegistry.get(videoId);
+    if (!video || !fs.existsSync(video.filepath)) {
+      return res.status(404).json({ error: 'Video not found on disk' });
+    }
+
+    const report = await scanVideoQualityReport(video.filepath, video.duration);
+    return res.json({ success: true, report });
+  } catch (err) {
+    return res.status(500).json({ error: (err as Error).message });
+  }
+});
+
 // Check status of a render job
 app.get('/api/clips/status/:jobId', (req: Request, res: Response) => {
   const { jobId } = req.params;
@@ -974,7 +1344,7 @@ app.get('/api/clips/status/:jobId', (req: Request, res: Response) => {
   return res.json({ job });
 });
 
-// Download rendered MP4 clip with safe headers and active download tracking
+// Download rendered MP4 clip with safe headers, range streaming, and active download tracking
 app.get('/api/clips/download/:jobId', (req: Request, res: Response) => {
   const { jobId } = req.params;
   const job = renderJobsRegistry.get(jobId);
@@ -984,27 +1354,44 @@ app.get('/api/clips/download/:jobId', (req: Request, res: Response) => {
   }
 
   const stat = fs.statSync(job.outputPath);
+  const fileSize = stat.size;
   const safeTitle = (job.title || 'clip').replace(/[^a-zA-Z0-9_-]/g, '_');
   const safeAspect = (job.aspectRatio || '9x16').replace(':', 'x');
   const safeFilename = `${safeTitle}_${safeAspect}.mp4`;
 
   activeDownloads.add(jobId);
-  res.setHeader('Content-Type', 'video/mp4');
-  res.setHeader('Content-Length', stat.size);
+  const cleanup = () => {
+    activeDownloads.delete(jobId);
+  };
+  res.on('finish', cleanup);
+  res.on('close', cleanup);
+
   res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
+  res.setHeader('Accept-Ranges', 'bytes');
+  res.setHeader('Content-Type', 'video/mp4');
 
-  const stream = fs.createReadStream(job.outputPath);
-  stream.on('end', () => {
-    activeDownloads.delete(jobId);
-  });
-  stream.on('error', () => {
-    activeDownloads.delete(jobId);
-  });
-  res.on('close', () => {
-    activeDownloads.delete(jobId);
-  });
+  const range = req.headers.range;
+  if (range) {
+    const parts = range.replace(/bytes=/, '').split('-');
+    const start = parseInt(parts[0], 10);
+    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
 
-  stream.pipe(res);
+    if (isNaN(start) || start >= fileSize || (parts[1] && (end >= fileSize || start > end))) {
+      res.status(416).setHeader('Content-Range', `bytes */${fileSize}`).end();
+      return;
+    }
+
+    const chunksize = end - start + 1;
+    res.status(206);
+    res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`);
+    res.setHeader('Content-Length', chunksize);
+    const stream = fs.createReadStream(job.outputPath, { start, end });
+    stream.pipe(res);
+  } else {
+    res.setHeader('Content-Length', fileSize);
+    const stream = fs.createReadStream(job.outputPath);
+    stream.pipe(res);
+  }
 });
 
 // Delete a rendered clip from server without affecting already downloaded files
@@ -1204,9 +1591,25 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const httpServer = app.listen(PORT, '0.0.0.0', () => {
     console.log(`[ClipGenius AI] Full-Stack server running on port ${PORT}`);
     console.log(`[ClipGenius AI] Mode: ${isProd ? 'Production' : 'Development'}`);
+  });
+
+  // Match Node HTTP server timeouts to long-running AI analysis & Cloud Run 300s request ceiling
+  httpServer.timeout = 0; // Keep active sockets open while awaiting upstream AI/FFmpeg
+  httpServer.requestTimeout = 300000; // 300s total request budget
+  httpServer.keepAliveTimeout = 61000; // Prevent 5s idle socket close races behind proxies
+  httpServer.headersTimeout = 65000; // Must exceed keepAliveTimeout
+
+  httpServer.on('clientError', (err, socket) => {
+    logAiLifecycle('HTTP_CLIENT_ERROR', 'server', {
+      message: err.message,
+      code: (err as NodeJS.ErrnoException).code,
+    });
+    if (socket.writable) {
+      socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+    }
   });
 }
 

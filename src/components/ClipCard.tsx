@@ -340,6 +340,29 @@ export const ClipCard: React.FC<ClipCardProps> = ({
               <span className="rounded bg-neutral-800 px-2 py-0.5 text-[11px] font-medium text-neutral-400">
                 {clip.targetPlatform ? clip.targetPlatform.toUpperCase() : 'SHORTS'}
               </span>
+              {clip.evidenceMode && (
+                <span
+                  className={`rounded px-2 py-0.5 text-[10px] font-medium border ${
+                    clip.evidenceMode === 'combined'
+                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                      : 'bg-sky-500/15 text-sky-300 border-sky-500/30'
+                  }`}
+                >
+                  {clip.evidenceMode === 'combined' ? 'Visual + Transcript' : 'Visual-Only'}
+                </span>
+              )}
+              {clip.boundaryAdjusted && (
+                <span
+                  className="rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-300 border border-amber-500/30"
+                  title={
+                    clip.originalStartTime !== undefined && clip.originalEndTime !== undefined
+                      ? `Original bounds ${clip.originalStartTime.toFixed(1)}s–${clip.originalEndTime.toFixed(1)}s trimmed cleanly`
+                      : 'Boundary trimmed around transition'
+                  }
+                >
+                  Transition-Trimmed
+                </span>
+              )}
               {/* Review / Publish Lifecycle Status */}
               <span
                 className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
@@ -531,6 +554,21 @@ export const ClipCard: React.FC<ClipCardProps> = ({
                 <span className="font-semibold text-neutral-300">Why it works: </span>
                 <span className="text-neutral-400">{clip.viralityReason}</span>
               </div>
+              {clip.boundaryAdjusted && clip.originalStartTime !== undefined && clip.originalEndTime !== undefined && (
+                <div className="text-[11px] text-amber-300/90">
+                  <span className="font-semibold">Original Timeline: </span>
+                  <span className="font-mono">
+                    {clip.originalStartTime.toFixed(1)}s – {clip.originalEndTime.toFixed(1)}s
+                  </span>{' '}
+                  → Adjusted to <span className="font-mono">{clip.startTime.toFixed(1)}s – {clip.endTime.toFixed(1)}s</span>
+                </div>
+              )}
+              {clip.transitionNotes && clip.transitionNotes.length > 0 && (
+                <div className="text-[11px] text-neutral-400">
+                  <span className="font-semibold text-neutral-300">Transition Inspection: </span>
+                  <span>{clip.transitionNotes.join(' ')}</span>
+                </div>
+              )}
               <div className="flex flex-wrap gap-1 pt-1">
                 {clip.hashtags.map((tag, i) => (
                   <span

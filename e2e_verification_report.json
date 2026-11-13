@@ -1,0 +1,305 @@
+{
+  "reportVersion": "2.0",
+  "runId": "run-1794553103219-9966",
+  "runStatus": "failed",
+  "startedAt": "2026-11-13T06:58:23.217Z",
+  "updatedAt": "2026-11-13T07:00:59.701Z",
+  "completedAt": "2026-11-13T07:00:59.701Z",
+  "archivedPreviousReportPath": null,
+  "interruptedReason": null,
+  "metadata": {
+    "videos": {
+      "keynote": {
+        "id": "vid-1794553127876",
+        "duration": 194.5
+      },
+      "short": {
+        "id": "vid-1794553128352",
+        "duration": 12
+      },
+      "visualOnly": {
+        "id": "vid-1794553128880",
+        "duration": 75
+      }
+    }
+  },
+  "summary": {
+    "total": 7,
+    "passed": 3,
+    "failed": 3,
+    "incomplete": 0,
+    "skipped": 1
+  },
+  "tests": {
+    "test1_insufficient_content": {
+      "name": "test1_insufficient_content",
+      "status": "passed",
+      "startedAt": "2026-11-13T06:58:49.327Z",
+      "completedAt": "2026-11-13T06:58:55.546Z",
+      "elapsedMs": 6219,
+      "error": null,
+      "telemetry": {
+        "providerUsed": "nemotron",
+        "modelUsed": "nvidia/nemotron-3.5-super-vl:free",
+        "httpStatus": 200,
+        "openRouterHttpStatus": 200,
+        "latencyMs": 3435,
+        "clientElapsedMs": 6217,
+        "networkRetryCount": 0,
+        "repairRetryCount": 0,
+        "finishReason": "stop",
+        "fallbackUsed": false,
+        "openRouterRequestId": "gen-1794553132-Ndj3oZjvUqNx8AzuXkak",
+        "serverRequestId": "ai-1794553129382-171",
+        "tokenUsage": {
+          "promptTokens": 2703,
+          "completionTokens": 349,
+          "reasoningTokens": 257,
+          "totalTokens": 3052
+        },
+        "cost": 0
+      },
+      "details": {
+        "clipsCount": 0,
+        "hasInsufficientContent": true
+      }
+    },
+    "test2_visual_only_punchy_hooks": {
+      "name": "test2_visual_only_punchy_hooks",
+      "status": "passed",
+      "startedAt": "2026-11-13T06:58:55.547Z",
+      "completedAt": "2026-11-13T06:59:23.832Z",
+      "elapsedMs": 28285,
+      "error": null,
+      "telemetry": {
+        "providerUsed": "nemotron",
+        "modelUsed": "nvidia/nemotron-3.5-super-vl:free",
+        "httpStatus": 200,
+        "openRouterHttpStatus": 200,
+        "latencyMs": 19135,
+        "clientElapsedMs": 28284,
+        "networkRetryCount": 0,
+        "repairRetryCount": 0,
+        "finishReason": "stop",
+        "fallbackUsed": false,
+        "openRouterRequestId": "gen-1794553143-tsTh02odPgW24UgVXJsj",
+        "serverRequestId": "ai-1794553135551-521",
+        "tokenUsage": {
+          "promptTokens": 3340,
+          "completionTokens": 2664,
+          "reasoningTokens": 2099,
+          "totalTokens": 6004
+        },
+        "cost": 0
+      },
+      "details": {
+        "editorialPolicy": {
+          "label": "Punchy Hooks & Micro-Moments",
+          "minDuration": 15,
+          "maxDuration": 30,
+          "idealRange": "15-30s"
+        },
+        "evidenceMode": "visual_only",
+        "speechAnalysisClaimed": false,
+        "accepted": [
+          {
+            "title": "Demo 1: Sub-50ms NVMe Keyframe Scrub",
+            "startTime": 0,
+            "endTime": 24,
+            "duration": 24,
+            "evidenceMode": "visual_only"
+          },
+          {
+            "title": "Demo 3: Concurrent MP4 Exports for Social",
+            "startTime": 50,
+            "endTime": 75,
+            "duration": 25,
+            "evidenceMode": "visual_only"
+          }
+        ],
+        "rejected": [],
+        "rejectedCount": 0
+      }
+    },
+    "test3_viral_shorts_combined": {
+      "name": "test3_viral_shorts_combined",
+      "status": "passed",
+      "startedAt": "2026-11-13T06:59:23.832Z",
+      "completedAt": "2026-11-13T07:00:20.760Z",
+      "elapsedMs": 56928,
+      "error": null,
+      "telemetry": {
+        "providerUsed": "nemotron",
+        "modelUsed": "nvidia/nemotron-3.5-super-vl:free",
+        "httpStatus": 200,
+        "openRouterHttpStatus": 200,
+        "latencyMs": 40863,
+        "clientElapsedMs": 56923,
+        "networkRetryCount": 0,
+        "repairRetryCount": 0,
+        "finishReason": "stop",
+        "fallbackUsed": false,
+        "openRouterRequestId": "gen-1794553174-7T4C9xpTjjLsTjGgpreq",
+        "serverRequestId": "ai-1794553163837-867",
+        "tokenUsage": {
+          "promptTokens": 4242,
+          "completionTokens": 2996,
+          "reasoningTokens": 1932,
+          "totalTokens": 7238
+        },
+        "cost": 0
+      },
+      "details": {
+        "editorialPolicy": {
+          "label": "Viral Shorts / TikTok",
+          "minDuration": 30,
+          "maxDuration": 60,
+          "idealRange": "30-60s"
+        },
+        "transcriptVerification": {
+          "evidenceMode": "combined",
+          "transcriptSource": "embedded_subtitles",
+          "speechAnalysisClaimed": true,
+          "segmentsCount": 15
+        },
+        "accepted": [
+          {
+            "id": "clip-nemotron-1794553216407-1",
+            "title": "AI Startups: Distribution Beats Benchmarks",
+            "startTime": 0,
+            "endTime": 36.5,
+            "boundaryAdjusted": false,
+            "duration": 36.5,
+            "viralityScore": 83,
+            "evidenceMode": "combined"
+          },
+          {
+            "id": "clip-nemotron-1794553217951-2",
+            "title": "Short-Form Retention: The 3-Second Rule",
+            "startTime": 39,
+            "endTime": 74.5,
+            "boundaryAdjusted": false,
+            "duration": 35.5,
+            "viralityScore": 87,
+            "evidenceMode": "combined"
+          },
+          {
+            "id": "clip-nemotron-1794553219216-3",
+            "title": "Video Tech: HTTP 206 Streaming",
+            "startTime": 77,
+            "endTime": 112.5,
+            "boundaryAdjusted": false,
+            "duration": 35.5,
+            "viralityScore": 80,
+            "evidenceMode": "combined"
+          },
+          {
+            "id": "clip-nemotron-1794553220740-4",
+            "title": "Podcast Clipping: Q&A Arcs Over Timers",
+            "startTime": 115,
+            "endTime": 151,
+            "boundaryAdjusted": false,
+            "duration": 36,
+            "viralityScore": 83,
+            "evidenceMode": "combined"
+          }
+        ],
+        "rejected": []
+      }
+    },
+    "test4a_educational_style": {
+      "name": "test4a_educational_style",
+      "status": "failed",
+      "startedAt": "2026-11-13T07:00:20.761Z",
+      "completedAt": "2026-11-13T07:00:33.339Z",
+      "elapsedMs": 12578,
+      "error": "Analyze HTTP 500 (requestId=ai-1794553220773-66): Strict Nemotron Mode failed: OpenRouter rate limit reached (HTTP 429). Please wait a moment or use Gemini fallback.",
+      "telemetry": {
+        "providerUsed": null,
+        "modelUsed": null,
+        "httpStatus": 500,
+        "openRouterHttpStatus": null,
+        "latencyMs": 12574,
+        "clientElapsedMs": 12574,
+        "networkRetryCount": 0,
+        "repairRetryCount": 0,
+        "finishReason": null,
+        "fallbackUsed": null,
+        "openRouterRequestId": null,
+        "serverRequestId": "ai-1794553220773-66",
+        "tokenUsage": null,
+        "cost": null
+      },
+      "details": {
+        "editorialStyle": "educational",
+        "videoId": "vid-1794553127876"
+      }
+    },
+    "test4b_storytelling_style": {
+      "name": "test4b_storytelling_style",
+      "status": "failed",
+      "startedAt": "2026-11-13T07:00:33.339Z",
+      "completedAt": "2026-11-13T07:00:48.274Z",
+      "elapsedMs": 14935,
+      "error": "Analyze HTTP 500 (requestId=ai-1794553233343-938): Strict Nemotron Mode failed: OpenRouter rate limit reached (HTTP 429). Please wait a moment or use Gemini fallback.",
+      "telemetry": {
+        "providerUsed": null,
+        "modelUsed": null,
+        "httpStatus": 500,
+        "openRouterHttpStatus": null,
+        "latencyMs": 14935,
+        "clientElapsedMs": 14935,
+        "networkRetryCount": 0,
+        "repairRetryCount": 0,
+        "finishReason": null,
+        "fallbackUsed": null,
+        "openRouterRequestId": null,
+        "serverRequestId": "ai-1794553233343-938",
+        "tokenUsage": null,
+        "cost": null
+      },
+      "details": {
+        "editorialStyle": "storytelling",
+        "videoId": "vid-1794553127876"
+      }
+    },
+    "test4c_creator_direction": {
+      "name": "test4c_creator_direction",
+      "status": "failed",
+      "startedAt": "2026-11-13T07:00:48.275Z",
+      "completedAt": "2026-11-13T07:00:59.700Z",
+      "elapsedMs": 11425,
+      "error": "Analyze HTTP 500 (requestId=ai-1794553248280-840): Strict Nemotron Mode failed: OpenRouter rate limit reached (HTTP 429). Please wait a moment or use Gemini fallback.",
+      "telemetry": {
+        "providerUsed": null,
+        "modelUsed": null,
+        "httpStatus": 500,
+        "openRouterHttpStatus": null,
+        "latencyMs": 11425,
+        "clientElapsedMs": 11425,
+        "networkRetryCount": 0,
+        "repairRetryCount": 0,
+        "finishReason": null,
+        "fallbackUsed": null,
+        "openRouterRequestId": null,
+        "serverRequestId": "ai-1794553248280-840",
+        "tokenUsage": null,
+        "cost": null
+      },
+      "details": {
+        "editorialStyle": "educational",
+        "videoId": "vid-1794553127876",
+        "creatorDirection": "Focus ONLY on Topic 3 about HTTP 206 byte-range streaming and instant timeline scrubbing (around 77s-114s). Return 1 clip specifically covering HTTP 206 streaming."
+      }
+    },
+    "test5_previews_and_batch_render": {
+      "name": "test5_previews_and_batch_render",
+      "status": "skipped",
+      "startedAt": "2026-11-13T07:00:59.701Z",
+      "completedAt": "2026-11-13T07:00:59.701Z",
+      "elapsedMs": 0,
+      "error": "Held for Checkpoint 4 (--checkpoint=3 / --skip-render)",
+      "telemetry": null
+    }
+  }
+}

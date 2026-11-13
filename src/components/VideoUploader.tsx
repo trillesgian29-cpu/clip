@@ -172,7 +172,7 @@ export const VideoUploader: React.FC<VideoUploaderProps> = ({
     }
   };
 
-  const handleSample = async (sampleType: 'podcast' | 'keynote' | 'gaming') => {
+  const handleSample = async (sampleType: 'podcast' | 'educational' | 'technical_glitch' | 'keynote' | 'gaming') => {
     setError(null);
     setIsLoading(true);
     try {
@@ -442,38 +442,38 @@ export const VideoUploader: React.FC<VideoUploaderProps> = ({
               <FileVideo className="h-4 w-4" />
             </div>
             <div>
-              <p className="text-xs font-semibold text-white">Podcast Masterclass</p>
-              <p className="text-[11px] text-neutral-400 mt-0.5">Full interview audio & test stream</p>
+              <p className="text-xs font-semibold text-white">🎙️ Podcast Masterclass (65s)</p>
+              <p className="text-[11px] text-neutral-400 mt-0.5">Multi-speaker conversation & quotes</p>
             </div>
           </button>
 
           <button
             type="button"
             disabled={isLoading}
-            onClick={() => handleSample('keynote')}
+            onClick={() => handleSample('educational')}
             className="flex items-start gap-3 rounded-xl border border-neutral-800 bg-neutral-950/80 p-3 text-left hover:border-indigo-500/50 hover:bg-neutral-900 transition group disabled:opacity-50"
           >
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400 group-hover:bg-indigo-500/20">
               <Film className="h-4 w-4" />
             </div>
             <div>
-              <p className="text-xs font-semibold text-white">AI Revolution Keynote</p>
-              <p className="text-[11px] text-neutral-400 mt-0.5">Tech presentation demo</p>
+              <p className="text-xs font-semibold text-white">💡 Educational Doc (80s)</p>
+              <p className="text-[11px] text-neutral-400 mt-0.5">Chapters, slides & takeaway cards</p>
             </div>
           </button>
 
           <button
             type="button"
             disabled={isLoading}
-            onClick={() => handleSample('gaming')}
-            className="flex items-start gap-3 rounded-xl border border-neutral-800 bg-neutral-950/80 p-3 text-left hover:border-emerald-500/50 hover:bg-neutral-900 transition group disabled:opacity-50"
+            onClick={() => handleSample('technical_glitch')}
+            className="flex items-start gap-3 rounded-xl border border-neutral-800 bg-neutral-950/80 p-3 text-left hover:border-amber-500/50 hover:bg-neutral-900 transition group disabled:opacity-50"
           >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500/20">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400 group-hover:bg-amber-500/20">
               <Play className="h-4 w-4" />
             </div>
             <div>
-              <p className="text-xs font-semibold text-white">Gaming Championship</p>
-              <p className="text-[11px] text-neutral-400 mt-0.5">Fast-paced high action</p>
+              <p className="text-xs font-semibold text-white">⚠️ Glitch & Speech (65s)</p>
+              <p className="text-[11px] text-neutral-400 mt-0.5">SMPTE bars (0-15s) + Keynote (20-65s)</p>
             </div>
           </button>
         </div>

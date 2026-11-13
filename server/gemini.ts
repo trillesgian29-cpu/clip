@@ -1,15 +1,17 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import { ClipSuggestion, ViralScores, StoryStructure } from '../src/types/index.ts';
 
-// Shared server-side Gemini client with recommended User-Agent header
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || '',
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
+// Server-side Gemini client helper with recommended User-Agent header
+function createGeminiClient(apiKey: string): GoogleGenAI {
+  return new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      },
     },
-  },
-});
+  });
+}
 
 export interface AnalyzeOptions {
   duration: number; // Video length in seconds
@@ -141,9 +143,8 @@ export async function analyzeVideoWithGemini(options: AnalyzeOptions): Promise<C
 
   const apiKey = process.env.GEMINI_API_KEY;
 
-  // Fallback if no Gemini API key configured
   if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
-    return generateFallbackClips(duration, filename, chunkOffsetSeconds, chunkName);
+    throw new Error('GEMINI_API_KEY is not configured in the server environment.');
   }
 
   // Build existing clips summary to prevent duplicates
@@ -222,6 +223,7 @@ Output valid JSON only matching the schema.
 `;
 
   try {
+    const ai = createGeminiClient(apiKey);
     const response = await ai.models.generateContent({
       model: 'gemini-3.8-flash',
       contents: prompt,
@@ -356,148 +358,14 @@ Output valid JSON only matching the schema.
       });
     }
 
-    return generateFallbackClips(duration, filename, chunkOffsetSeconds, chunkName);
+    return [];
   } catch (error) {
+    const errAny = error as any;
+    const statusCode = errAny?.status || errAny?.code;
+    const rawMsg = errAny?.message || String(error);
     console.error('Error generating viral clips with Gemini:', error);
-    return generateFallbackClips(duration, filename, chunkOffsetSeconds, chunkName);
+    throw new Error(
+      `Gemini upstream API failed${statusCode ? ` (HTTP ${statusCode})` : ''}: ${rawMsg}`
+    );
   }
-}
-
-/**
- * Intelligent fallback generator conforming strictly to the viral clip detection prompt
- */
-function generateFallbackClips(
-  duration: number,
-  filename: string,
-  chunkOffsetSeconds: number = 0,
-  chunkName: string = 'part1_0-15'
-): ClipSuggestion[] {
-  const safeDuration = Math.max(20, duration);
-  const targetCount = Math.min(3, Math.max(1, Math.floor(safeDuration / 25)));
-  const step = Math.min(60, safeDuration / (targetCount + 1));
-
-  const templates = [
-    {
-      hook: 'Nobody is talking about this yet, but it changes everything.',
-      quote: 'If you look closely at what happened next, the whole dynamic shifted in seconds.',
-      reason: 'Deep curiosity gap with unexpected revelation within the first 4 seconds.',
-      weakness: 'Requires immediate punchy subtitles so viewers catch the opening whisper.',
-      altHooks: [
-        'Stop doing this if you want real results in 2026.',
-        'The unwritten rule nobody told you about.',
-      ] as [string, string],
-      scores: {
-        hook: 9.2,
-        standalone: 8.8,
-        emotion: 8.6,
-        payoff: 9.0,
-        share_worthy: 8.9,
-        pacing: 8.7,
-        visual_potential: 8.5,
-        overall_average: 8.8,
-      },
-      story: {
-        opening: 'Sudden claim challenging common assumptions.',
-        context: 'Brief setup explaining the core situation in 5 seconds.',
-        curiosity: 'What caused the unexpected change?',
-        payoff: 'Concrete takeaway and proof point delivered cleanly.',
-      },
-    },
-    {
-      hook: 'Watch what happened when we didn\'t stop recording.',
-      quote: 'Wait, did that actually just happen on camera? Look right there.',
-      reason: 'High emotion and authentic spontaneous reaction with strong visual payoff.',
-      weakness: 'The payoff happens late in the clip, so visual pacing must stay tight.',
-      altHooks: [
-        'You will not believe what just happened.',
-        'This was completely unscripted and caught on mic.',
-      ] as [string, string],
-      scores: {
-        hook: 8.9,
-        standalone: 8.7,
-        emotion: 9.4,
-        payoff: 8.6,
-        share_worthy: 9.1,
-        pacing: 8.8,
-        visual_potential: 9.2,
-        overall_average: 8.95,
-      },
-      story: {
-        opening: 'Immediate camera turn towards unexpected action.',
-        context: 'Rapid audio cues grounding the viewer.',
-        curiosity: 'Anticipation of the reaction.',
-        payoff: 'Unfiltered laughter and resolution.',
-      },
-    },
-    {
-      hook: 'This one masterclass rule will save you 100 hours.',
-      quote: 'The single biggest mistake people make is skipping this foundation step.',
-      reason: 'Actionable insight with exceptionally high bookmark and share rate.',
-      weakness: 'Needs high-contrast captions to ensure educational value is digestible without sound.',
-      altHooks: [
-        'How top creators actually save 10 hours every week.',
-        'If you only remember one piece of advice today, make it this.',
-      ] as [string, string],
-      scores: {
-        hook: 8.7,
-        standalone: 9.2,
-        emotion: 8.2,
-        payoff: 9.3,
-        share_worthy: 9.0,
-        pacing: 8.9,
-        visual_potential: 8.4,
-        overall_average: 8.8,
-      },
-      story: {
-        opening: 'High-value question with high stakes.',
-        context: 'Direct statement of the core problem.',
-        curiosity: 'The exact framework used by top operators.',
-        payoff: 'Three-part actionable checklist.',
-      },
-    },
-  ];
-
-  const results: ClipSuggestion[] = [];
-
-  for (let i = 0; i < targetCount; i++) {
-    const tmpl = templates[i % templates.length];
-    const clipLen = 22 + i * 5;
-    const startSec = Math.round(Math.min(safeDuration - clipLen, (i * step) + 2) * 10) / 10;
-    const endSec = Math.round(Math.min(safeDuration, startSec + clipLen) * 10) / 10;
-    const durationSec = Math.round((endSec - startSec) * 10) / 10;
-
-    results.push({
-      id: `clip-curated-${Date.now()}-${i + 1}`,
-      clip_id: `${chunkName}_clip_0${i + 1}`,
-      title: tmpl.hook.length > 45 ? `${tmpl.hook.substring(0, 42)}...` : tmpl.hook,
-      hook: tmpl.hook,
-      description: `Curated viral segment from ${filename}`,
-      startTime: startSec,
-      endTime: endSec,
-      duration: durationSec,
-      viralityScore: Math.round(tmpl.scores.overall_average * 10),
-      viralityReason: tmpl.reason,
-      targetPlatform: 'all',
-      suggestedAspectRatio: '9:16',
-      captions: tmpl.hook,
-      hashtags: ['#viral', '#shorts', '#trending', '#reels'],
-      keyQuotes: [tmpl.quote],
-      local_start: secondsToMMSS(startSec - chunkOffsetSeconds),
-      local_end: secondsToMMSS(endSec - chunkOffsetSeconds),
-      global_start_seconds: startSec,
-      global_end_seconds: endSec,
-      duration_seconds: durationSec,
-      exact_quote: tmpl.quote,
-      reason: tmpl.reason,
-      scores: tmpl.scores,
-      weakness: tmpl.weakness,
-      alternate_hooks: tmpl.altHooks,
-      story_structure: tmpl.story,
-      selection_status: 'qualified',
-      reviewStatus: 'needs_review',
-      publishStatus: 'draft',
-    });
-  }
-
-  return results;
 }

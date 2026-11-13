@@ -1,0 +1,59 @@
+1
+00:00:01,000 --> 00:00:12,000
+Most AI startup founders obsess over benchmark percentages while ignoring distribution.
+
+2
+00:00:12,500 --> 00:00:25,000
+In reality, distribution channels beat raw model accuracy every single time in production.
+
+3
+00:00:25,500 --> 00:00:36,500
+Own the daily customer workflow before chasing public benchmark leaderboards.
+
+4
+00:00:39,000 --> 00:00:50,000
+You lose 65 percent of short-form viewers before the first three seconds finish.
+
+5
+00:00:50,500 --> 00:01:03,000
+Always open frame one with a sharp contradiction or undeniable visual proof.
+
+6
+00:01:03,500 --> 00:01:14,500
+Then deliver the promised payoff cleanly inside forty-five seconds.
+
+7
+00:01:17,000 --> 00:01:29,000
+Waiting for a full MP4 download kills viewer retention on mobile networks.
+
+8
+00:01:29,500 --> 00:01:42,000
+HTTP 206 byte-range streaming serves exact keyframes instantaneously when seeking.
+
+9
+00:01:42,500 --> 00:01:52,500
+Instant timeline scrubbing slashes server bandwidth and drops bounce rate in half.
+
+10
+00:01:55,000 --> 00:02:07,000
+Stop slicing long podcasts at arbitrary thirty-second timer intervals.
+
+11
+00:02:07,500 --> 00:02:20,000
+Align clip boundaries to complete question-and-answer arcs with full context.
+
+12
+00:02:20,500 --> 00:02:31,000
+Complete standalone thoughts double your average watch-through completion rate.
+
+13
+00:02:33,500 --> 00:02:45,000
+Daily manual timeline trimming drains creative energy for solo creators.
+
+14
+00:02:45,500 --> 00:02:56,000
+Separate semantic moment curation from automated FFmpeg batch rendering.
+
+15
+00:02:56,500 --> 00:03:05,500
+Ship an entire week of vertical shorts in one focused afternoon session.

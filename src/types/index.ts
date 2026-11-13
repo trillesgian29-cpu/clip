@@ -77,8 +77,115 @@ export interface ClipSuggestion {
   reviewStatus?: 'needs_review' | 'approved' | 'rejected';
   publishStatus?: 'draft' | 'ready_to_publish' | 'published';
   publishedAt?: string;
-  publishedPlatform?: 'tiktok' | 'reels' | 'shorts' | 'facebook' | 'all';
-  publishedId?: string;
+  publishedPlatform?: string;
+  // Rejection & Quality Tracking
+  rejectionReason?: string;
+  qualityCheckPassed?: boolean;
+  // Transition & Editorial Alignment Tracking
+  originalStartTime?: number;
+  originalEndTime?: number;
+  boundaryAdjusted?: boolean;
+  transitionNotes?: string[];
+  evidenceMode?: 'combined' | 'visual_only' | 'transcript_only';
+  transcriptSegment?: string;
+  editorialStyle?: EditorialCurationStyle;
+}
+
+export type EditorialCurationStyle =
+  | 'viral_shorts'
+  | 'punchy_hooks'
+  | 'educational'
+  | 'storytelling';
+
+export type AiProviderMode =
+  | 'strict_nemotron'
+  | 'auto_fallback'
+  | 'gemini';
+
+export type JsonParsingStatus =
+  | 'json_parsed_successfully'
+  | 'repaired_successfully'
+  | 'model_invalid_json'
+  | 'schema_validation_failed'
+  | 'timestamp_validation_failed'
+  | 'repair_failed'
+  | 'api_failed'
+  | 'success';
+
+export interface TranscriptSegment {
+  startTime: number;
+  endTime: number;
+  text: string;
+}
+
+export interface TranscriptVerificationInfo {
+  hasAudio: boolean;
+  audioActive: boolean;
+  audioMeanVolumeDb?: number;
+  embeddedSubtitlesFound: boolean;
+  transcriptAvailable: boolean;
+  transcriptSource: 'user_provided' | 'embedded_subtitles' | 'none';
+  evidenceMode: 'combined' | 'visual_only' | 'transcript_only';
+  speechAnalysisClaimed: boolean;
+  segmentsCount: number;
+  alignedSegmentsCount: number;
+  notes: string;
+}
+
+export interface OpenRouterDetails {
+  requestId?: string;
+  model?: string;
+  promptTokens?: number;
+  completionTokens?: number;
+  reasoningTokens?: number;
+  totalTokens?: number;
+  cost?: number;
+  isFreeModel: boolean;
+  latencyMs?: number;
+  httpStatus?: number;
+  // JSON and schema verification status
+  jsonParsingStatus?: JsonParsingStatus;
+  schemaValidationStatus?: 'passed' | 'repaired' | 'failed';
+  repairAttempted?: boolean;
+  repairSuccessful?: boolean;
+  repairRetryCount?: number;
+  networkRetryCount?: number;
+  finishReason?: string;
+  rawResponse?: string;
+  errorMessage?: string;
+}
+
+export interface AnalysisAuditReport {
+  requestedProvider: AiProviderMode;
+  actualProvider: 'nemotron' | 'gemini';
+  actualModel: string;
+  fallbackUsed: boolean;
+  fallbackReason?: string;
+  openRouterDetails?: OpenRouterDetails;
+  rejectedMoments: Array<{ title?: string; start: number; end: number; reason: string }>;
+  editorialStyle: EditorialCurationStyle;
+  editorialPolicy?: {
+    label: string;
+    minDuration: number;
+    maxDuration: number;
+    idealRange: string;
+  };
+  creatorDirection?: string;
+  analyzedAt: string;
+  jsonParsingStatus?: JsonParsingStatus;
+  repairRetryCount?: number;
+  networkRetryCount?: number;
+  hasInsufficientContent?: boolean;
+  analysisSummary?: string;
+  transcriptVerification?: TranscriptVerificationInfo;
+}
+
+export interface JobQueueCounts {
+  selected: number;
+  queued: number;
+  processing: number;
+  completed: number;
+  failed: number;
 }
 
 export interface PublishedClip {

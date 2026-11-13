@@ -1,0 +1,108 @@
+{
+  "timestamp": "2026-11-12T16:23:50.416Z",
+  "video": {
+    "id": "vid-1794500535048-97",
+    "filename": "viral_masterclass_45s.mp4",
+    "originalName": "viral_masterclass_45s.mp4",
+    "filepath": "/app/applet/uploads/viral_masterclass_45s.mp4",
+    "url": "/api/videos/stream/vid-1794500535048-97",
+    "duration": 45,
+    "width": 1280,
+    "height": 720,
+    "aspectRatio": "1280:720",
+    "format": "mov,mp4,m4a,3gp,3g2,mj2",
+    "size": 771817,
+    "bitrate": 30061,
+    "fps": 30,
+    "hasAudio": true,
+    "uploadedAt": "2026-11-12T16:21:57.460Z"
+  },
+  "result": {
+    "providerUsed": "nemotron",
+    "modelUsed": "nvidia/nemotron-3.5-super-vl:free",
+    "fallbackUsed": false,
+    "openRouterDetails": {
+      "requestId": "gen-1794500605-ZdjUJD4DJAPuzE17GeAZ",
+      "model": "nvidia/nemotron-3.5-super-vl:free",
+      "promptTokens": 1362,
+      "completionTokens": 2173,
+      "reasoningTokens": 1747,
+      "totalTokens": 3535,
+      "cost": 0,
+      "isFreeModel": true,
+      "latencyMs": 892,
+      "httpStatus": 200,
+      "finishReason": "stop",
+      "rawResponse": "{\"hasInsufficientContent\": false, \"analysisSummary\": \"The video consists of educational title cards outlining a viral video blueprint. Two distinct, high-value segments were identified focusing on the 'Curiosity Gap' hook and the 'Shareability Factor', both critical for short-form retention and virality.\", \"clips\": [{\"title\": \"The 3-Second Curiosity Gap\", \"hook\": \"Start in the middle of action, never with intro.\", \"startTime\": 10.0, \"endTime\": 17.0, \"reason\": \"This segment introduces the core hook strategy for viral videos, advising creators to skip intros and begin mid-action to capture attention immediately.\", \"confidence\": 0.95, \"category\": \"Educational\", \"weakness\": \"None\", \"scores\": {\"hookStrength\": 9.5, \"audienceCuriosity\": 9.0, \"informationalValue\": 9.0, \"storyFlow\": 8.5, \"standaloneContext\": 8.0, \"payoff\": 7.5, \"shareability\": 8.5}}, {\"title\": \"The Group-Chat Shareability Factor\", \"hook\": \"People share clips that make them look insightful.\", \"startTime\": 32.0, \"endTime\": 39.0, \"reason\": \"This segment explains the psychology behind sharing content, specifically optimizing for the forward button, which is essential for viral distribution.\", \"confidence\": 0.92, \"category\": \"Educational\", \"weakness\": \"None\", \"scores\": {\"hookStrength\": 8.5, \"audienceCuriosity\": 8.5, \"informationalValue\": 9.0, \"storyFlow\": 8.0, \"standaloneContext\": 8.5, \"payoff\": 8.0, \"shareability\": 9.5}}]}",
+      "repairAttempted": false,
+      "repairSuccessful": false,
+      "repairRetryCount": 0,
+      "jsonParsingStatus": "json_parsed_successfully",
+      "schemaValidationStatus": "passed"
+    },
+    "clipsCount": 1,
+    "clips": [
+      {
+        "id": "clip-nemotron-1794500630409-2",
+        "clipId": "nemotron_part_01_2",
+        "clip_id": "nemotron_part_01_2",
+        "sourceVideoId": "vid-1794500535048-97",
+        "title": "The Group-Chat Shareability Factor",
+        "hook": "People share clips that make them look insightful.",
+        "description": "This segment explains the psychology behind sharing content, specifically optimizing for the forward button, which is essential for viral distribution.",
+        "startTime": 32,
+        "endTime": 39,
+        "start": 32,
+        "end": 39,
+        "duration": 7,
+        "duration_seconds": 7,
+        "viralityScore": 86,
+        "score": 86,
+        "confidence": 0.92,
+        "category": "Educational",
+        "viralityReason": "This segment explains the psychology behind sharing content, specifically optimizing for the forward button, which is essential for viral distribution.",
+        "reason": "This segment explains the psychology behind sharing content, specifically optimizing for the forward button, which is essential for viral distribution.",
+        "targetPlatform": "all",
+        "suggestedAspectRatio": "9:16",
+        "captions": "People share clips that make them look insightful.",
+        "hashtags": [
+          "#viral",
+          "#shorts",
+          "#trending",
+          "#reels"
+        ],
+        "keyQuotes": [
+          "People share clips that make them look insightful."
+        ],
+        "weakness": "None",
+        "alternate_hooks": [
+          "Did you notice this subtle detail?",
+          "Watch what happens next."
+        ],
+        "scores": {
+          "hook": 8.5,
+          "standalone": 8.5,
+          "emotion": 9,
+          "payoff": 8,
+          "share_worthy": 9.5,
+          "pacing": 8,
+          "visual_potential": 8.5,
+          "overall_average": 8.6
+        },
+        "analysisStatus": "completed",
+        "reviewStatus": "needs_review",
+        "publishStatus": "draft",
+        "thumbnailUrl": "/api/thumbnails/clip/vid-1794500535048-97?t=32",
+        "selected": true,
+        "qualityCheckPassed": true
+      }
+    ],
+    "stagesCompleted": [
+      "video_inspected",
+      "frames_extracted",
+      "nemotron_analyzing",
+      "candidates_ranked",
+      "timestamps_validated"
+    ]
+  }
+}

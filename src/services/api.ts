@@ -5,6 +5,11 @@ import {
   ProjectData,
   SystemStatus,
   PublishedClip,
+  AnalysisAuditReport,
+  OpenRouterDetails,
+  AiProviderMode,
+  EditorialCurationStyle,
+  TranscriptVerificationInfo,
 } from '../types/index.ts';
 import { getSupabaseClient } from './supabaseClient.ts';
 
@@ -162,7 +167,7 @@ export const api = {
   },
 
   // Load Demonstration Sample Video
-  async loadSampleVideo(sampleType: 'podcast' | 'keynote' | 'gaming' = 'podcast'): Promise<{
+  async loadSampleVideo(sampleType: 'podcast' | 'educational' | 'technical_glitch' | 'keynote' | 'gaming' = 'podcast'): Promise<{
     video: VideoMetadata;
     thumbnailUrl: string;
   }> {
@@ -180,10 +185,12 @@ export const api = {
   // AI Clip Analysis (Nemotron / Gemini)
   async analyzeVideo(params: {
     videoId: string;
-    preferredProvider?: 'nemotron' | 'gemini' | 'auto';
+    preferredProvider?: AiProviderMode;
     clipCount?: number;
-    clipStyle?: string;
+    clipStyle?: EditorialCurationStyle;
+    editorialStyle?: EditorialCurationStyle;
     customPrompt?: string;
+    creatorDirection?: string;
     transcript?: string;
     videoCategory?: string;
     targetAudience?: string;
@@ -195,19 +202,42 @@ export const api = {
   }): Promise<{
     clips: ClipSuggestion[];
     sourceVideo: VideoMetadata;
-    providerUsed?: string;
+    providerUsed?: 'nemotron' | 'gemini';
     modelUsed?: string;
+    fallbackUsed?: boolean;
+    fallbackReason?: string;
+    openRouterDetails?: OpenRouterDetails;
+    rejectedMoments?: Array<{ title?: string; start: number; end: number; reason: string }>;
+    editorialStyleUsed?: EditorialCurationStyle;
+    editorialPolicy?: {
+      label: string;
+      minDuration: number;
+      maxDuration: number;
+      idealRange: string;
+    };
+    creatorDirectionUsed?: string;
     stagesCompleted?: string[];
+    hasInsufficientContent?: boolean;
+    analysisSummary?: string;
+    transcriptVerification?: TranscriptVerificationInfo;
+    audit?: AnalysisAuditReport;
   }> {
-    const res = await safeFetch('/api/ai/analyze', {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(params),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(new Error('AI analysis client request timed out after 295s')), 295000);
+    try {
+      const res = await safeFetch('/api/ai/analyze', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(params),
+        signal: controller.signal,
+      });
 
-    const data = await safeJson(res);
-    if (!res.ok) throw new Error(data.error || 'AI analysis failed');
-    return data;
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(data.error || 'AI analysis failed');
+      return data;
+    } finally {
+      clearTimeout(timeoutId);
+    }
   },
 
   // Delete Render Job and File
@@ -238,6 +268,62 @@ export const api = {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to start render');
     return data.job;
+  },
+
+  // Batch rendering for multiple clips atomically
+  async batchRenderClips(params: {
+    clips: Array<{
+      clipId: string;
+      sourceVideoId: string;
+      title: string;
+      startTime: number;
+      endTime: number;
+      aspectRatio?: '9:16' | '1:1' | '16:9';
+    }>;
+    defaultAspectRatio?: '9:16' | '1:1' | '16:9';
+  }): Promise<{ success: boolean; count: number; jobs: RenderJob[] }> {
+    const res = await safeFetch('/api/clips/batch-render', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(params),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to dispatch batch render');
+    return data;
+  },
+
+  // Retry a failed render job
+  async retryRenderJob(jobId: string): Promise<{ success: boolean; job: RenderJob }> {
+    const res = await safeFetch(`/api/clips/retry/${jobId}`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to retry render job');
+    return data;
+  },
+
+  // Check Video Quality Report (Inspector)
+  async inspectVideoQuality(videoId: string): Promise<{
+    success: boolean;
+    report: {
+      videoId: string;
+      duration: number;
+      hasAudio: boolean;
+      validContentRanges: Array<{ start: number; end: number }>;
+      smpteBarsRanges: Array<{ start: number; end: number }>;
+      blackScreenRanges: Array<{ start: number; end: number }>;
+      technicalInterruptionRanges: Array<{ start: number; end: number; type: string; reason: string }>;
+      overallQualityScore: number;
+      recommendations: string[];
+    };
+  }> {
+    const res = await safeFetch(`/api/quality/inspect/${videoId}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to inspect video quality');
+    return data;
   },
 
   // Check Render Job Status

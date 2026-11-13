@@ -182,10 +182,12 @@ export async function extractSampleFrames(
 
 /**
  * Render a video clip with precise start/end time and aspect ratio cropping
+ * Includes atomic temporary file output, decode validation, and Windows playback compatibility
  */
 export async function renderClip(options: RenderOptions): Promise<string> {
   const { sourcePath, outputPath, startTime, endTime, aspectRatio, onProgress } = options;
   const clipDuration = Math.max(0.5, endTime - startTime);
+  const tempOutputPath = `${outputPath}.tmp.mp4`;
 
   // Probe audio stream existence to avoid forcing nonexistent audio
   let hasAudioStream = true;
@@ -194,6 +196,19 @@ export async function renderClip(options: RenderOptions): Promise<string> {
     hasAudioStream = probe.hasAudio;
   } catch {
     hasAudioStream = true;
+  }
+
+  // Ensure output directory exists
+  const outputDir = path.dirname(outputPath);
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+
+  // Clean up any stale temp file
+  if (fs.existsSync(tempOutputPath)) {
+    try {
+      fs.unlinkSync(tempOutputPath);
+    } catch {}
   }
 
   // Prepare aspect ratio filter
@@ -215,13 +230,15 @@ export async function renderClip(options: RenderOptions): Promise<string> {
     '-t', clipDuration.toFixed(3),
     '-vf', videoFilter,
     '-c:v', 'libx264',
+    '-profile:v', 'high',
+    '-level', '4.1',
     '-preset', 'fast',
     '-crf', '22',
   ];
 
   // Only encode AAC audio if audio stream actually exists
   if (hasAudioStream) {
-    args.push('-c:a', 'aac', '-b:a', '192k', '-ar', '48000');
+    args.push('-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2');
   } else {
     args.push('-an');
   }
@@ -231,7 +248,7 @@ export async function renderClip(options: RenderOptions): Promise<string> {
     '-movflags', '+faststart',
     '-avoid_negative_ts', 'make_zero',
     '-y',
-    outputPath
+    tempOutputPath
   );
 
   return new Promise((resolve, reject) => {
@@ -250,21 +267,57 @@ export async function renderClip(options: RenderOptions): Promise<string> {
         const mins = parseFloat(timeMatch[2]);
         const secs = parseFloat(timeMatch[3]);
         const currentSecs = hours * 3600 + mins * 60 + secs;
-        const percent = Math.min(99, Math.round((currentSecs / clipDuration) * 100));
+        const percent = Math.min(95, Math.round((currentSecs / clipDuration) * 100));
         onProgress(percent);
       }
     });
 
-    process.on('close', (code) => {
-      if (code === 0) {
+    process.on('close', async (code) => {
+      if (code !== 0) {
+        if (fs.existsSync(tempOutputPath)) {
+          try { fs.unlinkSync(tempOutputPath); } catch {}
+        }
+        reject(new Error(`FFmpeg exited with code ${code}. Details: ${errorOutput.slice(-300)}`));
+        return;
+      }
+
+      try {
+        // Validation 1: Verify output file exists and is nonzero
+        if (!fs.existsSync(tempOutputPath)) {
+          throw new Error('Render output file was not created by FFmpeg process');
+        }
+        const fileSize = fs.statSync(tempOutputPath).size;
+        if (fileSize < 1024) {
+          throw new Error(`Render output file is too small (${fileSize} bytes), indicates truncated encode`);
+        }
+
+        // Validation 2: Run FFprobe to verify video stream, resolution, and format
+        const probe = await probeVideo(tempOutputPath);
+        if (probe.duration <= 0 || probe.width <= 0 || probe.height <= 0) {
+          throw new Error('Rendered MP4 has invalid stream dimensions or duration');
+        }
+
+        // Validation 3: Run full decode test to guarantee file is not corrupt
+        const decodeTestCmd = `ffmpeg -v error -i "${tempOutputPath}" -f null -`;
+        await execAsync(decodeTestCmd);
+
+        // Validation 4: Atomic rename to final output filename
+        fs.renameSync(tempOutputPath, outputPath);
+
         if (onProgress) onProgress(100);
         resolve(outputPath);
-      } else {
-        reject(new Error(`FFmpeg exited with code ${code}. Details: ${errorOutput.slice(-300)}`));
+      } catch (validationErr) {
+        if (fs.existsSync(tempOutputPath)) {
+          try { fs.unlinkSync(tempOutputPath); } catch {}
+        }
+        reject(new Error(`Render validation failed: ${(validationErr as Error).message}`));
       }
     });
 
     process.on('error', (err) => {
+      if (fs.existsSync(tempOutputPath)) {
+        try { fs.unlinkSync(tempOutputPath); } catch {}
+      }
       reject(err);
     });
   });
